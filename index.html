@@ -90,6 +90,115 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .screen, .toast { transition: none !important; } }
 
+/* ---------- Home ---------- */
+.home-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.specimen {
+  position: relative; width: min(80vw, 44vh, 380px); aspect-ratio: 1; border-radius: 28px; overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%), rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line); box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35);
+}
+.specimen canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.specimen-caption {
+  position: absolute; left: 12px; right: 12px; bottom: 10px; margin: 0; text-align: center;
+  font-family: var(--serif); font-size: 15px; color: var(--ink-2); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.btn-generate {
+  min-width: min(86vw, 340px); min-height: 76px; padding: 14px 28px; border-radius: 999px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #0c2319;
+  background: linear-gradient(180deg, #f3dc9a, #d9b35f);
+  box-shadow: 0 12px 34px rgba(233, 201, 119, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+.btn-generate:active { transform: scale(0.98); }
+.btn-generate .gen-label { font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
+.btn-generate .gen-hint { font-size: 13px; opacity: 0.75; }
+.home-row { display: flex; gap: 12px; }
+.btn-ghost, .btn-primary, .btn-secondary {
+  min-height: 48px; padding: 0 18px; border-radius: 999px; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-ghost, .btn-secondary { border: 1px solid var(--line); background: var(--card); }
+.btn-primary { background: linear-gradient(180deg, #f3dc9a, #d9b35f); color: #0c2319; font-weight: 600; }
+.btn-primary:disabled { background: rgba(233, 201, 119, 0.22); color: var(--ink-2); }
+.count {
+  min-width: 26px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 13px;
+  background: rgba(233, 201, 119, 0.16); color: var(--gold); display: inline-grid; place-items: center;
+}
+.kicker { margin: 0; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }
+
+/* ---------- Lab (generation and hybridization progress) ---------- */
+.overlay.lab { background: radial-gradient(circle at 50% 40%, rgba(40, 90, 64, 0.5), rgba(3, 12, 8, 0.94) 70%); }
+.lab-card { width: min(88vw, 360px); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.lab-stage { position: relative; width: 100%; height: 240px; }
+.lab-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lab-parent {
+  position: absolute; top: 50%; width: 96px; height: 96px; margin-top: -48px; border-radius: 16px;
+  object-fit: contain; background: rgba(255, 255, 255, 0.04);
+}
+.lab-parent-a { left: 0; }
+.lab-parent-b { right: 0; }
+.lab-title { margin: 0; font-family: var(--serif); font-size: 20px; }
+.progress { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, #7fd3b5, #e9c977); transition: width 0.08s linear; }
+.lab-count { margin: 0; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lab-skip { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+/* ---------- Reveal ---------- */
+.overlay.reveal { align-items: stretch; justify-content: stretch; background: radial-gradient(120% 70% at 50% 0%, #1d4a36 0%, #0a1f16 55%, #04100b 100%); }
+.reveal-card {
+  width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column;
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + 16px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 16px);
+}
+.reveal-top { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
+.reveal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.reveal-body > * { flex-shrink: 0; }
+.reveal-stage {
+  position: relative; width: 100%; height: min(50vh, 440px); flex: 0 0 auto; border-radius: 26px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%);
+}
+.reveal-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rv-name {
+  margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 7vw, 34px); line-height: 1.15;
+  animation: rise 0.7s ease both 0.2s;
+}
+.rv-lineage { margin: 0; color: var(--ink-2); font-size: 14px; }
+.rv-tier-row { display: flex; align-items: center; gap: 12px; }
+.tier-chip {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid currentColor; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+}
+.tier-chip.tier-common { color: var(--tier-common); }
+.tier-chip.tier-uncommon { color: var(--tier-uncommon); }
+.tier-chip.tier-rare { color: var(--tier-rare); }
+.tier-chip.tier-epic { color: var(--tier-epic); }
+.tier-chip.tier-legendary { color: var(--tier-legendary); }
+.tier-chip.tier-mythic { color: var(--tier-mythic); }
+.rv-score { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 14px; }
+.meter { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.meter-fill {
+  height: 100%; width: 0; border-radius: 4px;
+  background: linear-gradient(90deg, #a9bcae, #86e09a, #6cc9ee, #bb97ff, #ffd27a, #ff86e0);
+  transition: width 1.2s ease 0.3s;
+}
+.rv-pctl { margin: 0; font-size: 13px; color: var(--ink-3); }
+.rv-h { margin: 6px 0 0; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+.traits { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.trait {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px;
+  border-radius: 12px; background: var(--card); border: 1px solid rgba(255, 255, 255, 0.05); animation: rise 0.5s ease both;
+}
+.trait-name { display: block; font-size: 15px; }
+.trait-gene { display: block; font-size: 12px; color: var(--ink-3); }
+.trait-pct { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.trait-pct.r-legendary { color: var(--tier-legendary); }
+.trait-pct.r-epic { color: var(--tier-epic); }
+.trait-pct.r-rare { color: var(--tier-rare); }
+.trait-pct.r-uncommon { color: var(--tier-uncommon); }
+.trait-pct.r-common { color: var(--tier-common); }
+.reveal-actions { display: flex; gap: 12px; padding-top: 12px; flex: 0 0 auto; }
+.reveal-actions button { flex: 1; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
 /* @@css:components */
 </style>
 </head>
@@ -103,7 +212,20 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
         <p class="sub">A living botanical laboratory</p>
       </div>
     </header>
-    <!-- @@html:home -->
+    <div class="home-stage">
+      <div class="specimen" id="specimen">
+        <canvas id="homeCanvas" aria-hidden="true"></canvas>
+        <p class="specimen-caption" id="specimenCaption">Your first specimen waits in the soil.</p>
+      </div>
+      <button type="button" class="btn-generate" id="btnGenerate">
+        <span class="gen-label">Generate Plant</span>
+        <span class="gen-hint">45 genes, endless variety</span>
+      </button>
+      <div class="home-row">
+        <button type="button" class="btn-ghost" id="btnGallery" data-nav="gallery">Gallery <span class="count" id="galleryCount">0</span></button>
+        <button type="button" class="btn-ghost" id="btnHybridize" data-nav="gallery">Hybridize</button>
+      </div>
+    </div>
   </section>
 
   <section id="screen-gallery" class="screen" aria-label="Gallery">
@@ -123,10 +245,40 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   </section>
 
   <div id="overlay-lab" class="overlay lab" hidden role="status" aria-live="polite">
-    <!-- @@html:lab -->
+    <div class="lab-card">
+      <div class="lab-stage">
+        <img class="lab-parent lab-parent-a" id="labParentA" alt="" hidden>
+        <canvas id="labCanvas" aria-hidden="true"></canvas>
+        <img class="lab-parent lab-parent-b" id="labParentB" alt="" hidden>
+      </div>
+      <p class="kicker" id="labKicker">Germinating</p>
+      <p class="lab-title" id="labTitle"></p>
+      <div class="progress" aria-hidden="true"><div class="progress-fill" id="labBar"></div></div>
+      <p class="lab-count" id="labCount"></p>
+      <p class="lab-skip">Tap to skip</p>
+    </div>
   </div>
   <div id="overlay-reveal" class="overlay reveal" hidden role="dialog" aria-modal="true" aria-label="Specimen reveal">
-    <!-- @@html:reveal -->
+    <div class="reveal-card">
+      <header class="reveal-top">
+        <span class="kicker" id="rvKicker">New specimen</span>
+        <button type="button" class="icon-btn" id="rvClose" aria-label="Close">&times;</button>
+      </header>
+      <div class="reveal-body">
+        <div class="reveal-stage"><canvas id="rvCanvas" aria-hidden="true"></canvas></div>
+        <h2 class="rv-name" id="rvName"></h2>
+        <p class="rv-lineage" id="rvLineage" hidden></p>
+        <div class="rv-tier-row"><span class="tier-chip" id="rvTier"></span><span class="rv-score" id="rvScore"></span></div>
+        <div class="meter" aria-hidden="true"><div class="meter-fill" id="rvMeter"></div></div>
+        <p class="rv-pctl" id="rvPctl"></p>
+        <h3 class="rv-h">Notable traits</h3>
+        <ul class="traits" id="rvTraits"></ul>
+      </div>
+      <footer class="reveal-actions">
+        <button type="button" class="btn-secondary" id="rvAgain">Generate Another</button>
+        <button type="button" class="btn-primary" id="rvSave">Save to Gallery</button>
+      </footer>
+    </div>
   </div>
   <div id="sheet" class="overlay sheet" hidden role="dialog" aria-modal="true" aria-label="Actions">
     <!-- @@html:sheet -->
@@ -1700,6 +1852,14 @@ class PlantView {
     ctx.restore();
   }
 
+  // Empties the canvas and drops the plant (used when there is nothing to show).
+  clear() {
+    this.rt = null;
+    this.record = null;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
   // Called by the Loop. Advances growth, then draws.
   update(t, dt) {
     if (this.grow < 1) this.grow = Math.min(1, this.grow + dt / this.growDuration);
@@ -2147,6 +2307,324 @@ EG.showToast = showToast;
 /* @@js:store */
 
 /* ===== UI ===== */
+/* ---------- UI: navigation, home, generate flow, lab, and reveal ---------- */
+const $ = (id) => document.getElementById(id);
+const screenEls = { home: $('screen-home'), gallery: $('screen-gallery'), detail: $('screen-detail') };
+const TIER_IDS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+let homeView = null;
+let revealView = null;
+let reveal = null; // the specimen on screen: { record, saved }
+let busy = false;
+
+// Show one screen. The home preview animates only while home is showing.
+function go(name) {
+  for (const [key, el] of Object.entries(screenEls)) el.classList.toggle('active', key === name);
+  if (name === 'home') {
+    renderHome();
+    homeView.resize();
+    homeView.start();
+  } else {
+    homeView.stop();
+  }
+}
+
+function renderHome() {
+  const plants = Store.all();
+  $('galleryCount').textContent = String(plants.length);
+  if (!plants.length) {
+    homeView.clear();
+    $('specimenCaption').textContent = 'Your first specimen waits in the soil.';
+    return;
+  }
+  const latest = plants[0];
+  homeView.setPlant(latest, { animate: false });
+  $('specimenCaption').textContent = `${latest.name} · ${analyze(latest.genes).tier.label}`;
+}
+
+// Vibrate briefly when haptics are on. Devices without vibration are skipped silently.
+function buzz(pattern) {
+  if (!Store.settings.haptics || !navigator.vibrate) return;
+  try {
+    navigator.vibrate(pattern);
+  } catch (err) {
+    // Vibration is not allowed in this context.
+  }
+}
+
+function randomSeed() {
+  if (window.crypto && crypto.getRandomValues) {
+    const a = new Uint32Array(1);
+    crypto.getRandomValues(a);
+    return a[0];
+  }
+  return Math.floor(Math.random() * 4294967296);
+}
+
+// A new specimen, not stored yet. Its name follows from the genome seed.
+function newPlant(seed = randomSeed()) {
+  const genes = sampleGenome(rngFrom(seed));
+  const named = pureName(analyze(genes));
+  return {
+    id: newId(), name: named.name, genus: named.genus, genes,
+    createdAt: Date.now(), fav: false, gen: 0, parents: null, origin: null, mutations: null, mutationChance: null,
+  };
+}
+
+// Lab drawings. A sprout grows for a generation, and a DNA ladder lights up for a hybridization. p is progress.
+function drawLab(ctx, kind, p, w, h, dpr) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2;
+  if (kind === 'hybridize') {
+    const top = h * 0.06;
+    const bottom = h * 0.94;
+    const amp = w * 0.2;
+    const now = performance.now() / 600;
+    for (let k = 0; k < GENE_COUNT; k++) {
+      const f = k / (GENE_COUNT - 1);
+      const y = top + (bottom - top) * f;
+      const ph = f * Math.PI * 4 + now;
+      const xa = cx + Math.sin(ph) * amp;
+      const xb = cx - Math.sin(ph) * amp;
+      const lit = (k + 1) / GENE_COUNT <= p;
+      ctx.strokeStyle = lit ? 'rgba(233, 201, 119, 0.9)' : 'rgba(233, 201, 119, 0.16)';
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(xa, y);
+      ctx.lineTo(xb, y);
+      ctx.stroke();
+      ctx.fillStyle = lit ? '#7fd3b5' : 'rgba(127, 211, 181, 0.28)';
+      ctx.beginPath();
+      ctx.arc(xa, y, 3.2 * dpr, 0, TAU);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(xb, y, 3.2 * dpr, 0, TAU);
+      ctx.fill();
+    }
+    return;
+  }
+  const baseY = h * 0.84;
+  const grow = Math.min(1, p * 1.2);
+  const stem = grow * h * 0.56;
+  const glow = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, w * 0.45);
+  glow.addColorStop(0, `rgba(233, 201, 119, ${0.25 * (1 - grow)})`);
+  glow.addColorStop(1, 'rgba(233, 201, 119, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(92, 64, 38, 0.7)';
+  ctx.beginPath();
+  ctx.ellipse(cx, baseY + 4 * dpr, w * 0.2, 9 * dpr, 0, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = '#86e09a';
+  ctx.lineWidth = 3 * dpr;
+  ctx.beginPath();
+  ctx.moveTo(cx, baseY);
+  ctx.quadraticCurveTo(cx + 8 * dpr, baseY - stem * 0.5, cx, baseY - stem);
+  ctx.stroke();
+  const leaves = grow > 0.4 ? Math.min(1, (grow - 0.4) / 0.6) : 0;
+  for (const side of [-1, 1]) {
+    const ly = baseY - stem * (side < 0 ? 0.55 : 0.75);
+    ctx.fillStyle = 'rgba(134, 224, 154, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(cx + side * 22 * dpr * leaves, ly, 22 * dpr * leaves, 9 * dpr * leaves, side * -0.5, 0, TAU);
+    ctx.fill();
+  }
+}
+
+// Progress overlay for a generation or a hybridization. Resolves when the animation ends, or after a tap past 0.3 s.
+// For hybridization, opts.parents holds the two parent records and their thumbnails slide toward the center.
+function openLab(kind, opts = {}) {
+  const hybrid = kind === 'hybridize';
+  const duration = hybrid ? 1.4 : 0.9;
+  const overlay = $('overlay-lab');
+  const canvas = $('labCanvas');
+  const parentA = $('labParentA');
+  const parentB = $('labParentB');
+  const dual = hybrid && Array.isArray(opts.parents) && opts.parents.length === 2;
+  $('labKicker').textContent = hybrid ? 'Splicing' : 'Germinating';
+  $('labTitle').textContent = dual ? `${opts.parents[0].name} × ${opts.parents[1].name}` : 'Sampling a new genome';
+  parentA.hidden = !dual;
+  parentB.hidden = !dual;
+  if (dual) {
+    parentA.src = renderThumb(opts.parents[0]);
+    parentB.src = renderThumb(opts.parents[1]);
+  }
+  overlay.hidden = false;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.round(Math.max(1, rect.width || 260) * dpr);
+  canvas.height = Math.round(Math.max(1, rect.height || 240) * dpr);
+  const ctx = canvas.getContext('2d');
+  const start = performance.now();
+  return new Promise((resolve) => {
+    let finished = false;
+    let backstop = 0;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(backstop);
+      Loop.remove(viewer);
+      overlay.removeEventListener('pointerdown', skip);
+      overlay.hidden = true;
+      resolve();
+    };
+    const skip = () => {
+      if (performance.now() - start >= 300) finish();
+    };
+    const viewer = {
+      update() {
+        const p = Math.min(1, (performance.now() - start) / 1000 / duration);
+        drawLab(ctx, hybrid ? 'hybridize' : 'generate', p, canvas.width, canvas.height, dpr);
+        $('labBar').style.width = `${Math.round(p * 100)}%`;
+        const genes = Math.min(GENE_COUNT, Math.round(p * GENE_COUNT));
+        $('labCount').textContent = `${hybrid ? 'Splicing' : 'Sampling'} genes ${genes} / ${GENE_COUNT}`;
+        if (dual) {
+          const shift = (1 - p) * 42;
+          parentA.style.transform = `translateX(${shift}px)`;
+          parentB.style.transform = `translateX(${-shift}px)`;
+        }
+        if (p >= 1) finish();
+      },
+    };
+    overlay.addEventListener('pointerdown', skip);
+    Loop.add(viewer);
+    // Frames can arrive late on slow devices. This timer ends the lab on time regardless.
+    backstop = setTimeout(finish, duration * 1000 + 40);
+  });
+}
+
+// Rarity band for a trait's probability p. It picks the trait's color.
+function rarityClass(p) {
+  if (p <= 0.01) return 'legendary';
+  if (p <= 0.03) return 'epic';
+  if (p <= 0.06) return 'rare';
+  if (p < 0.12) return 'uncommon';
+  return 'common';
+}
+
+function formatPct(v) {
+  return `${v < 10 ? Number(v.toFixed(1)) : Math.round(v)}%`;
+}
+
+function renderTraits(notable) {
+  const list = $('rvTraits');
+  list.textContent = '';
+  notable.forEach(({ gene, allele }, i) => {
+    const li = document.createElement('li');
+    li.className = 'trait';
+    li.style.animationDelay = `${0.35 + i * 0.07}s`;
+    const left = document.createElement('div');
+    const name = document.createElement('span');
+    name.className = 'trait-name';
+    name.textContent = allele.name;
+    const geneLabel = document.createElement('span');
+    geneLabel.className = 'trait-gene';
+    geneLabel.textContent = gene.label;
+    left.append(name, geneLabel);
+    const pct = document.createElement('span');
+    pct.className = `trait-pct r-${rarityClass(allele.p)}`;
+    pct.textContent = formatPct(allele.p * 100);
+    li.append(left, pct);
+    list.append(li);
+  });
+}
+
+function setSaveButton(saved) {
+  const btn = $('rvSave');
+  btn.disabled = saved;
+  btn.textContent = saved ? 'Saved' : 'Save to Gallery';
+}
+
+// Shows a specimen full screen with its growth animation, tier, rarity meter, and notable traits.
+function openReveal(record, opts = {}) {
+  const analysis = analyze(record.genes);
+  reveal = { record, saved: Boolean(Store.get(record.id)) };
+  const hybrid = Boolean(opts.hybrid || record.parents);
+  $('rvKicker').textContent = hybrid ? `Hybrid specimen · Gen ${record.gen}` : 'New specimen';
+  $('rvName').textContent = record.name;
+  const lineage = $('rvLineage');
+  lineage.hidden = !record.parents;
+  lineage.textContent = record.parents ? `${record.parents[0].name} × ${record.parents[1].name}` : '';
+  const chip = $('rvTier');
+  chip.textContent = analysis.tier.label;
+  chip.className = `tier-chip tier-${analysis.tier.id}`;
+  $('rvScore').textContent = `Rarity ${analysis.score.toFixed(1)} / 100`;
+  $('rvPctl').textContent = `Rarer than ${analysis.score.toFixed(1)}% of plants`;
+  const meter = $('rvMeter');
+  meter.style.width = '0%';
+  requestAnimationFrame(() => {
+    meter.style.width = `${analysis.score.toFixed(1)}%`;
+  });
+  renderTraits(analysis.notable.slice(0, 8));
+  setSaveButton(reveal.saved);
+  $('overlay-reveal').hidden = false;
+  revealView.resize();
+  revealView.setPlant(record, { animate: true, growDuration: 1.8 });
+  revealView.start();
+  buzz(TIER_IDS.indexOf(analysis.tier.id) >= 3 ? [20, 40, 20] : [10]);
+}
+
+function closeReveal() {
+  if (!reveal) return;
+  if (!reveal.saved) showToast('Unsaved specimens fade away.');
+  revealView.stop();
+  $('overlay-reveal').hidden = true;
+  reveal = null;
+}
+
+// Saving is idempotent: the button disables itself, and the store ignores a repeat.
+function saveReveal() {
+  if (!reveal || reveal.saved) return;
+  Store.add(reveal.record);
+  reveal.saved = true;
+  setSaveButton(true);
+  buzz([8]);
+  showToast('Saved to your gallery');
+}
+
+// Generate: a busy guard stops double taps from starting a second run.
+async function generateFlow() {
+  if (busy) return;
+  busy = true;
+  try {
+    buzz([12]);
+    const record = newPlant();
+    await openLab('generate');
+    openReveal(record);
+  } finally {
+    busy = false;
+  }
+}
+
+function init() {
+  homeView = new PlantView($('homeCanvas'), {});
+  revealView = new PlantView($('rvCanvas'), {});
+  $('btnGenerate').addEventListener('click', generateFlow);
+  $('rvSave').addEventListener('click', saveReveal);
+  $('rvAgain').addEventListener('click', () => {
+    closeReveal();
+    generateFlow();
+  });
+  $('rvClose').addEventListener('click', closeReveal);
+  document.querySelectorAll('[data-nav]').forEach((el) => {
+    el.addEventListener('click', () => go(el.dataset.nav));
+  });
+  window.addEventListener('resize', () => {
+    if (screenEls.home.classList.contains('active')) homeView.resize();
+    if (reveal) revealView.resize();
+  });
+  go('home');
+}
+
+EG.newPlant = newPlant;
+EG.openLab = openLab;
+EG.openReveal = openReveal;
+EG.closeReveal = closeReveal;
+EG.buzz = buzz;
+EG.go = go;
+
+init();
+
 /* @@js:ui */
 </script>
 </body>
