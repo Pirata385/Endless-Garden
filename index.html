@@ -1,0 +1,3963 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#061510">
+<meta name="description" content="Endless Garden: a procedural botanical game of 45-gene plants, rarity tiers, and hybridization.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M12 52C12 26 28 12 54 10c-2 26-16 42-42 42z' fill='%23e9c977'/%3E%3C/svg%3E">
+<title>Endless Garden</title>
+<style>
+/* ---------- Design tokens: one dark botanical theme ---------- */
+:root {
+  --bg0: #061510;
+  --bg1: #0c2319;
+  --bg2: #163d2e;
+  --ink: #f2f6ea;
+  --ink-2: #c3d4c0;
+  --ink-3: #8aa48f;
+  --gold: #e9c977;
+  --gold-2: #b98f45;
+  --line: rgba(233, 201, 119, 0.2);
+  --card: rgba(255, 255, 255, 0.045);
+  --glass: rgba(7, 24, 18, 0.88);
+  --tier-common: #a9bcae;
+  --tier-uncommon: #86e09a;
+  --tier-rare: #6cc9ee;
+  --tier-epic: #bb97ff;
+  --tier-legendary: #ffd27a;
+  --tier-mythic: #ff86e0;
+  --radius: 20px;
+  --touch: 48px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ---------- Base and shell ---------- */
+[hidden] { display: none !important; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background-color: var(--bg0);
+  background-image:
+    radial-gradient(120% 70% at 50% -12%, #1f4d38 0%, rgba(31, 77, 56, 0) 62%),
+    radial-gradient(90% 60% at 100% 112%, #143d2d 0%, rgba(20, 61, 45, 0) 60%),
+    linear-gradient(180deg, #0c2319 0%, var(--bg0) 72%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+#app { position: fixed; inset: 0; height: 100vh; height: 100dvh; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.noscript { padding: 24px; text-align: center; font-family: var(--serif); }
+
+.screen {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  padding: calc(var(--safe-t) + 14px) calc(var(--safe-r) + 16px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 16px);
+  opacity: 0; visibility: hidden; transform: translateY(12px);
+  transition: opacity .42s ease, transform .42s ease, visibility 0s linear .42s;
+}
+.screen.active { opacity: 1; visibility: visible; transform: none; transition: opacity .42s ease, transform .42s ease, visibility 0s; }
+.topbar { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+.brand-block { min-width: 0; }
+.brand { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 7vw, 36px); letter-spacing: 0.01em; color: var(--ink); }
+.title { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 24px; }
+.sub { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
+.icon-btn {
+  width: var(--touch); height: var(--touch); display: inline-grid; place-items: center; flex: 0 0 auto;
+  border-radius: 50%; font-size: 26px; line-height: 1; background: var(--card); border: 1px solid var(--line);
+}
+.overlay {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: rgba(3, 12, 8, 0.78);
+}
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--safe-b) + 22px); z-index: 80;
+  transform: translate(-50%, 16px); max-width: min(92vw, 420px); padding: 12px 18px;
+  border-radius: 14px; background: var(--glass); border: 1px solid var(--line);
+  color: var(--ink); font-size: 14px; text-align: center; opacity: 0; pointer-events: none;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Home ---------- */
+.home-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.specimen {
+  position: relative; width: min(80vw, 44vh, 380px); aspect-ratio: 1; border-radius: 28px; overflow: hidden; cursor: pointer;
+  background: radial-gradient(circle at 50% 42%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%), rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line); box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35);
+}
+.specimen canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.specimen-caption {
+  position: absolute; left: 12px; right: 12px; bottom: 10px; margin: 0; text-align: center;
+  font-family: var(--serif); font-size: 15px; color: var(--ink-2); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.btn-generate {
+  min-width: min(86vw, 340px); min-height: 76px; padding: 14px 28px; border-radius: 999px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #0c2319;
+  background: linear-gradient(180deg, #f3dc9a, #d9b35f);
+  box-shadow: 0 12px 34px rgba(233, 201, 119, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+.btn-generate:active { transform: scale(0.98); }
+.btn-generate .gen-label { font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
+.btn-generate .gen-hint { font-size: 13px; opacity: 0.75; }
+.home-actions { display: grid; justify-items: center; gap: 14px; min-width: 0; }
+.home-row { display: flex; gap: 12px; }
+.btn-ghost, .btn-primary, .btn-secondary {
+  min-height: 48px; padding: 0 18px; border-radius: 999px; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-ghost, .btn-secondary { border: 1px solid var(--line); background: var(--card); }
+.btn-primary { background: linear-gradient(180deg, #f3dc9a, #d9b35f); color: #0c2319; font-weight: 600; }
+.btn-primary:disabled { background: rgba(233, 201, 119, 0.22); color: var(--ink-2); }
+.count {
+  min-width: 26px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 13px;
+  background: rgba(233, 201, 119, 0.16); color: var(--gold); display: inline-grid; place-items: center;
+}
+.kicker { margin: 0; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }
+
+/* ---------- Lab (generation and hybridization progress) ---------- */
+.overlay.lab { background: radial-gradient(circle at 50% 40%, rgba(40, 90, 64, 0.5), rgba(3, 12, 8, 0.94) 70%); }
+.lab-card { width: min(88vw, 360px); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.lab-stage { position: relative; width: 100%; height: 240px; }
+.lab-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lab-parent {
+  position: absolute; top: 50%; width: 96px; height: 96px; margin-top: -48px; border-radius: 16px;
+  object-fit: contain; background: rgba(255, 255, 255, 0.04);
+}
+.lab-parent-a { left: 0; }
+.lab-parent-b { right: 0; }
+.lab-title { margin: 0; font-family: var(--serif); font-size: 20px; }
+.progress { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, #7fd3b5, #e9c977); transition: width 0.08s linear; }
+.lab-count { margin: 0; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lab-skip { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+/* ---------- Reveal ---------- */
+.overlay.reveal { align-items: stretch; justify-content: stretch; background: radial-gradient(120% 70% at 50% 0%, #1d4a36 0%, #0a1f16 55%, #04100b 100%); }
+.reveal-card {
+  width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column;
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + 16px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 16px);
+}
+.reveal-top { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
+.reveal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.reveal-body > * { flex-shrink: 0; }
+.reveal-info { display: flex; flex-direction: column; gap: 12px; }
+.reveal-info > * { flex-shrink: 0; }
+.reveal-stage {
+  position: relative; width: 100%; height: min(50vh, 440px); flex: 0 0 auto; border-radius: 26px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%);
+}
+.reveal-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rv-name {
+  margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(26px, 7vw, 34px); line-height: 1.15;
+  animation: rise 0.7s ease both 0.2s;
+}
+.rv-lineage { margin: 0; color: var(--ink-2); font-size: 14px; }
+.rv-tier-row { display: flex; align-items: center; gap: 12px; }
+.tier-chip {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid currentColor; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+}
+.tier-chip.tier-common { color: var(--tier-common); }
+.tier-chip.tier-uncommon { color: var(--tier-uncommon); }
+.tier-chip.tier-rare { color: var(--tier-rare); }
+.tier-chip.tier-epic { color: var(--tier-epic); }
+.tier-chip.tier-legendary { color: var(--tier-legendary); }
+.tier-chip.tier-mythic { color: var(--tier-mythic); }
+.rv-score { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 14px; }
+.meter { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.meter-fill {
+  height: 100%; width: 0; border-radius: 4px;
+  background: linear-gradient(90deg, #a9bcae, #86e09a, #6cc9ee, #bb97ff, #ffd27a, #ff86e0);
+  transition: width 1.2s ease 0.3s;
+}
+.rv-pctl { margin: 0; font-size: 13px; color: var(--ink-3); }
+.rv-h { margin: 6px 0 0; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+.traits { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.trait {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px;
+  border-radius: 12px; background: var(--card); border: 1px solid rgba(255, 255, 255, 0.05); animation: rise 0.5s ease both;
+}
+.trait-name { display: block; font-size: 15px; }
+.trait-gene { display: block; font-size: 12px; color: var(--ink-3); }
+.trait-pct { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.trait-pct.r-legendary { color: var(--tier-legendary); }
+.trait-pct.r-epic { color: var(--tier-epic); }
+.trait-pct.r-rare { color: var(--tier-rare); }
+.trait-pct.r-uncommon { color: var(--tier-uncommon); }
+.trait-pct.r-common { color: var(--tier-common); }
+.reveal-actions { display: flex; gap: 12px; padding-top: 12px; flex: 0 0 auto; }
+.reveal-actions button { flex: 1; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Gallery ---------- */
+.gallery-tools { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.search-input {
+  flex: 1; min-width: 0; min-height: 44px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 15px;
+}
+.search-input::placeholder { color: var(--ink-3); }
+.sort-select {
+  min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--glass); color: var(--ink); font: inherit; font-size: 14px;
+}
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink-2); font: inherit; font-size: 14px;
+}
+.chip[aria-pressed="true"] { background: rgba(233, 201, 119, 0.2); color: var(--ink); border-color: rgba(233, 201, 119, 0.5); }
+.gallery-sub { margin: 4px 0 6px; font-size: 13px; color: var(--ink-3); }
+.grid {
+  flex: 1; min-height: 0; overflow-y: auto; align-content: start; display: grid; grid-auto-rows: max-content;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;
+  padding: 4px 2px calc(var(--safe-b) + 24px);
+}
+.grid-sentinel { grid-column: 1 / -1; height: 1px; }
+.card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden; border-radius: 18px;
+  background: var(--card); border: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;
+}
+.card .thumb { aspect-ratio: 1; background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.08), rgba(0, 0, 0, 0) 70%); }
+.card .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.card-body { padding: 8px 44px 10px 10px; min-width: 0; }
+.card-name {
+  margin: 0; font-family: var(--serif); font-size: 15px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+.card-meta .tier-chip { min-height: 22px; padding: 0 8px; font-size: 10px; }
+.badge.hybrid {
+  padding: 3px 8px; border-radius: 999px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  background: linear-gradient(90deg, rgba(127, 211, 181, 0.25), rgba(233, 201, 119, 0.3)); color: var(--ink);
+}
+.gen { font-size: 11px; color: var(--ink-3); }
+.fav, .more {
+  position: absolute; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(7, 24, 18, 0.72); color: var(--ink-2); font-size: 18px;
+}
+.fav { top: 4px; right: 4px; }
+.fav.on { color: var(--gold); }
+.more { right: 2px; bottom: 2px; }
+.gallery-empty { margin: auto; padding: 24px; display: grid; gap: 14px; justify-items: center; text-align: center; color: var(--ink-2); }
+
+/* Bottom sheet */
+.overlay.sheet { align-items: flex-end; justify-content: stretch; }
+.sheet-card {
+  width: 100%; max-width: 520px; margin: 0 auto; padding: 14px 16px calc(var(--safe-b) + 16px);
+  border-radius: 22px 22px 0 0; background: var(--bg1); border-top: 1px solid var(--line);
+  display: grid; gap: 8px; animation: rise 0.3s ease both;
+}
+.sheet-title { margin: 0 0 4px; text-align: center; font-family: var(--serif); font-size: 18px; }
+.sheet-action {
+  min-height: 52px; border-radius: 14px; background: var(--card); border: 1px solid var(--line);
+  font: inherit; font-size: 16px;
+}
+.sheet-action.danger { color: #ff9b9b; }
+.sheet-action:disabled { opacity: 0.5; }
+
+/* Dialogs: prompt and confirm */
+.dialog-card {
+  width: min(88vw, 360px); padding: 20px; border-radius: 22px; background: var(--bg1);
+  border: 1px solid var(--line); display: grid; gap: 14px; animation: rise 0.3s ease both;
+}
+.dialog-card h3 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 20px; }
+.dialog-card input {
+  min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); font: inherit; font-size: 16px;
+}
+.dialog-text { margin: 0; color: var(--ink-2); font-size: 14px; }
+.dialog-actions { display: flex; gap: 10px; }
+.dialog-actions button { flex: 1; }
+.btn-danger { min-height: 48px; padding: 0 18px; border-radius: 999px; background: #c9574e; color: #fff; font-weight: 600; }
+
+/* ---------- Detail ---------- */
+.detail-body {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+  padding-bottom: calc(var(--safe-b) + 20px);
+}
+.detail-hero {
+  position: relative; flex: 0 0 auto; height: min(46vh, 400px); border-radius: 26px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%), rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+}
+.detail-hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.detail-hero .badges { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.detail-hero .gen { padding: 3px 8px; border-radius: 999px; background: rgba(7, 24, 18, 0.72); color: var(--ink); }
+.detail-info { display: grid; gap: 12px; }
+.name-row { display: flex; align-items: center; gap: 10px; }
+.dt-name {
+  margin: 0; flex: 1; min-width: 0; font-family: var(--serif); font-weight: 400;
+  font-size: clamp(24px, 6.4vw, 30px); line-height: 1.15; overflow-wrap: anywhere;
+}
+.name-row .icon-btn { width: 44px; height: 44px; font-size: 18px; }
+.parents { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.parent {
+  display: grid; gap: 4px; justify-items: center; padding: 8px; border-radius: 16px;
+  background: var(--card); border: 1px solid var(--line);
+}
+.parent img { width: 100%; max-width: 120px; aspect-ratio: 1; object-fit: contain; }
+.parent-name { margin: 0; font-size: 12px; color: var(--ink-2); text-align: center; }
+.mutation-note { margin: 0; font-size: 13px; color: var(--gold); }
+.rarity-card { padding: 14px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); display: grid; gap: 10px; }
+.show-all { align-self: flex-start; }
+.genome { border-radius: 16px; background: var(--card); border: 1px solid var(--line); padding: 4px 14px 12px; }
+.genome summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; }
+.genome summary::after { content: '▾'; color: var(--ink-2); transition: transform 0.2s ease; }
+.genome[open] summary::after { transform: rotate(180deg); }
+.genome h4 { margin: 10px 0 4px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+.genome ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.detail-actions .btn-danger { grid-column: 1 / -1; }
+.trait-gene { overflow-wrap: anywhere; }
+
+/* ---------- Breed mode: selected cards, the dock, and the hybrid reveal ---------- */
+.card.selected { box-shadow: 0 0 0 2px var(--gold); }
+.slot-mark {
+  position: absolute; left: 6px; top: 6px; height: 28px; padding: 0 9px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--gold); color: #1a1408; font-size: 13px; font-weight: 700; white-space: nowrap; pointer-events: none;
+}
+#gBreed { margin-left: auto; }
+.breed-dock {
+  flex: 0 0 auto; display: grid; gap: 10px; padding: 12px; border-radius: 22px;
+  background: rgba(7, 24, 18, 0.92); border: 1px solid var(--line);
+}
+.breed-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.breed-slot {
+  display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px; min-width: 0;
+  border-radius: 16px; background: var(--card); border: 1px dashed var(--line);
+}
+.breed-slot.empty { justify-content: center; font-size: 13px; color: var(--ink-3); }
+.breed-slot img { width: 48px; height: 48px; flex: 0 0 auto; object-fit: contain; }
+.slot-name { margin: 0; font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; }
+.breed-hint { margin: 0; font-size: 13px; color: var(--ink-2); }
+.breed-forecast { padding: 0; }
+.forecast-chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12px; color: var(--ink-2); white-space: nowrap;
+}
+.breed-note { margin: 0; font-size: 12px; color: var(--ink-3); }
+.breed-dock .btn-primary { min-height: 48px; }
+.rv-parents { grid-template-columns: 1fr 1fr; gap: 8px; }
+.rv-parents .parent { display: flex; align-items: center; gap: 10px; justify-items: initial; padding: 8px; min-width: 0; }
+.rv-parents .parent img { width: 44px; height: 44px; max-width: none; flex: 0 0 auto; }
+.rv-parents .parent-name { text-align: left; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- Settings and sharing ---------- */
+.overlay.dialog { z-index: 60; }
+.overlay.settings { align-items: flex-end; justify-content: stretch; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; }
+.setting-name { margin: 0; font-size: 16px; }
+.setting-hint { margin: 0; font-size: 13px; color: var(--ink-3); line-height: 1.4; }
+.switch { position: relative; width: 56px; height: 44px; flex: 0 0 auto; }
+.switch::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 10px; height: 24px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid var(--line); transition: background 0.2s ease;
+}
+.switch::after {
+  content: ''; position: absolute; left: 4px; top: 14px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--ink-2); transition: transform 0.2s ease, background 0.2s ease;
+}
+.switch.on::before { background: rgba(127, 211, 181, 0.35); border-color: rgba(127, 211, 181, 0.6); }
+.switch.on::after { transform: translateX(32px); background: var(--gold); }
+#btnSettings { margin-left: auto; }
+.detail-actions #dtUse { grid-column: 1 / -1; }
+
+/* ---------- Landscape phones and short windows: columns side by side ---------- */
+@media (orientation: landscape) and (max-height: 620px) {
+  .home-stage { flex-direction: row; gap: 32px; }
+  .specimen { width: min(62vh, 44vw, 360px); }
+  .btn-generate { min-width: min(40vw, 320px); min-height: 68px; }
+  .reveal-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; overflow: hidden; }
+  .reveal-stage { height: auto; align-self: stretch; }
+  .reveal-info { min-height: 0; overflow-y: auto; padding-right: 4px; }
+  .detail-body { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; overflow: hidden; }
+  .detail-hero { height: auto; align-self: stretch; }
+  .detail-info { min-height: 0; overflow-y: auto; padding-bottom: calc(var(--safe-b) + 20px); }
+  .breed-dock { width: min(100%, 460px); margin: 0 auto; }
+}
+
+</style>
+</head>
+<body>
+<noscript><p class="noscript">Endless Garden needs JavaScript to grow.</p></noscript>
+<p class="noscript" id="noCanvas" hidden>This browser cannot draw plants. Try a current version of Chrome, Safari, or Firefox.</p>
+<div id="app">
+  <section id="screen-home" class="screen active" aria-label="Home">
+    <header class="topbar">
+      <div class="brand-block">
+        <h1 class="brand">Endless Garden</h1>
+        <p class="sub">A living botanical laboratory</p>
+      </div>
+      <button type="button" class="icon-btn" id="btnSettings" aria-label="Settings">&#9881;</button>
+    </header>
+    <div class="home-stage">
+      <div class="specimen" id="specimen">
+        <canvas id="homeCanvas" aria-hidden="true"></canvas>
+        <p class="specimen-caption" id="specimenCaption">Your first specimen waits in the soil.</p>
+      </div>
+      <div class="home-actions">
+        <button type="button" class="btn-generate" id="btnGenerate">
+          <span class="gen-label">Generate Plant</span>
+          <span class="gen-hint">45 genes, endless variety</span>
+        </button>
+        <div class="home-row">
+          <button type="button" class="btn-ghost" id="btnGallery">Gallery <span class="count" id="galleryCount">0</span></button>
+          <button type="button" class="btn-ghost" id="btnHybridize">Hybridize</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-gallery" class="screen" aria-label="Gallery">
+    <header class="topbar">
+      <button class="icon-btn" type="button" data-nav="home" data-back aria-label="Back to home">&#8249;</button>
+      <div class="brand-block"><h2 class="title" id="gTitle">Gallery</h2></div>
+      <button type="button" class="btn-ghost" id="gBreed" aria-pressed="false">Breed</button>
+    </header>
+    <div class="gallery-tools">
+      <input type="search" id="gSearch" class="search-input" placeholder="Search names or traits" aria-label="Search specimens" autocomplete="off">
+      <select id="gSort" class="sort-select" aria-label="Sort specimens">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="rarest">Rarest</option>
+        <option value="common">Most common</option>
+        <option value="name">Name A–Z</option>
+        <option value="generation">Generation</option>
+      </select>
+    </div>
+    <div class="chips" id="gFilters" role="group" aria-label="Filter specimens"></div>
+    <p class="gallery-sub" id="gSub"></p>
+    <div class="grid" id="gGrid"></div>
+    <div class="gallery-empty" id="gEmpty" hidden></div>
+    <section class="breed-dock" id="breedDock" hidden aria-label="Parents for hybridization">
+      <div class="breed-slots">
+        <div class="breed-slot" id="slotA"></div>
+        <div class="breed-slot" id="slotB"></div>
+      </div>
+      <p class="breed-hint" id="breedHint"></p>
+      <div class="chips breed-forecast" id="breedForecast" aria-label="Rare traits they may pass on"></div>
+      <p class="breed-note">5–12% chance of mutation</p>
+      <button type="button" class="btn-primary" id="breedGo" disabled>Hybridize</button>
+    </section>
+  </section>
+
+  <section id="screen-detail" class="screen" aria-label="Specimen details">
+    <header class="topbar">
+      <button class="icon-btn" type="button" data-nav="gallery" data-back aria-label="Back to gallery">&#8249;</button>
+      <div class="brand-block"><h2 class="title">Specimen</h2></div>
+    </header>
+    <div class="detail-body">
+      <div class="detail-hero">
+        <canvas id="dtCanvas" aria-hidden="true"></canvas>
+        <div class="badges" id="dtBadges"></div>
+      </div>
+      <div class="detail-info">
+        <div class="name-row">
+          <h2 class="dt-name" id="dtName"></h2>
+          <button type="button" class="icon-btn" id="dtRename" aria-label="Rename specimen">&#9998;</button>
+        </div>
+        <p class="rv-lineage" id="dtLineage" hidden></p>
+        <div class="parents" id="dtParents" hidden></div>
+        <p class="mutation-note" id="dtMutation" hidden></p>
+        <div class="rarity-card">
+          <div class="rv-tier-row"><span class="tier-chip" id="dtTier"></span><span class="rv-score" id="dtScore"></span></div>
+          <div class="meter" aria-hidden="true"><div class="meter-fill" id="dtMeter"></div></div>
+          <p class="rv-pctl" id="dtPctl"></p>
+        </div>
+        <h3 class="rv-h">Notable traits</h3>
+        <ul class="traits" id="dtTraits"></ul>
+        <button type="button" class="btn-ghost show-all" id="dtShowAll"></button>
+        <details class="genome">
+          <summary>Full genome · 45 genes</summary>
+          <div id="dtGenome"></div>
+        </details>
+        <div class="detail-actions">
+          <button type="button" class="btn-secondary" id="dtFavorite"></button>
+          <button type="button" class="btn-secondary" id="dtShare">Share</button>
+          <button type="button" class="btn-secondary" id="dtUse">Use as parent</button>
+          <button type="button" class="btn-danger" id="dtDelete">Delete</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="overlay-lab" class="overlay lab" hidden role="status" aria-live="polite">
+    <div class="lab-card">
+      <div class="lab-stage">
+        <img class="lab-parent lab-parent-a" id="labParentA" alt="" hidden>
+        <canvas id="labCanvas" aria-hidden="true"></canvas>
+        <img class="lab-parent lab-parent-b" id="labParentB" alt="" hidden>
+      </div>
+      <p class="kicker" id="labKicker">Germinating</p>
+      <p class="lab-title" id="labTitle"></p>
+      <div class="progress" aria-hidden="true"><div class="progress-fill" id="labBar"></div></div>
+      <p class="lab-count" id="labCount"></p>
+      <p class="lab-skip">Tap to skip</p>
+    </div>
+  </div>
+  <div id="overlay-reveal" class="overlay reveal" hidden role="dialog" aria-modal="true" aria-label="Specimen reveal">
+    <div class="reveal-card">
+      <header class="reveal-top">
+        <span class="kicker" id="rvKicker">New specimen</span>
+        <button type="button" class="icon-btn" id="rvClose" aria-label="Close">&times;</button>
+      </header>
+      <div class="reveal-body">
+        <div class="reveal-stage"><canvas id="rvCanvas" aria-hidden="true"></canvas></div>
+        <div class="reveal-info">
+          <h2 class="rv-name" id="rvName"></h2>
+          <p class="rv-lineage" id="rvLineage" hidden></p>
+          <div class="parents rv-parents" id="rvParents" hidden></div>
+          <p class="mutation-note" id="rvMutation" hidden></p>
+          <div class="rv-tier-row"><span class="tier-chip" id="rvTier"></span><span class="badge hybrid" id="rvHybrid" hidden>Hybrid</span><span class="rv-score" id="rvScore"></span></div>
+          <div class="meter" aria-hidden="true"><div class="meter-fill" id="rvMeter"></div></div>
+          <p class="rv-pctl" id="rvPctl"></p>
+          <h3 class="rv-h">Notable traits</h3>
+          <ul class="traits" id="rvTraits"></ul>
+        </div>
+      </div>
+      <footer class="reveal-actions">
+        <button type="button" class="btn-secondary" id="rvAgain">Generate Another</button>
+        <button type="button" class="btn-primary" id="rvSave">Save to Gallery</button>
+      </footer>
+    </div>
+  </div>
+  <div id="sheet" class="overlay sheet" hidden role="dialog" aria-modal="true" aria-label="Actions">
+  </div>
+  <div id="dialog" class="overlay dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+  </div>
+  <div id="settings" class="overlay settings" hidden role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="sheet-card">
+      <p class="sheet-title">Settings</p>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Haptics</p>
+          <p class="setting-hint">A short buzz on save and delete, where the device allows it.</p>
+        </div>
+        <button type="button" class="switch" id="stHaptics" role="switch" aria-checked="true" aria-label="Haptics"></button>
+      </div>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Particles</p>
+          <p class="setting-hint">Pollen, petals, and light drifting around plants.</p>
+        </div>
+        <button type="button" class="switch" id="stParticles" role="switch" aria-checked="true" aria-label="Particles"></button>
+      </div>
+      <button type="button" class="btn-danger" id="stReset">Reset garden</button>
+      <p class="setting-hint">Removes every specimen. Settings stay.</p>
+      <button type="button" class="btn-secondary" id="stClose">Done</button>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+'use strict';
+/*
+ * Endless Garden: one file, labelled sections.
+ * Genetics, Naming, Layout, Renderer, Loop, Store, UI.
+ * window.EndlessGarden (alias EG) exposes helpers for automated checks.
+ */
+const EG = (window.EndlessGarden = window.EndlessGarden || {});
+
+/* ===== Genetics ===== */
+/* ---------- Gene catalogue (spec Appendix A) ---------- */
+// Weights are relative percentages. GENES normalizes them per gene into probabilities p.
+const GENE_GROUPS = Object.freeze([
+  Object.freeze({ id: 'trunk', label: 'Trunk', count: 9 }),
+  Object.freeze({ id: 'foliage', label: 'Foliage', count: 9 }),
+  Object.freeze({ id: 'flower', label: 'Flowers', count: 7 }),
+  Object.freeze({ id: 'fruit', label: 'Fruit and seed', count: 5 }),
+  Object.freeze({ id: 'form', label: 'Form', count: 4 }),
+  Object.freeze({ id: 'special', label: 'Special', count: 6 }),
+  Object.freeze({ id: 'unique', label: 'Unique', count: 5 }),
+]);
+const GENE_COUNT = 45;
+
+// [key, label, group id, [[allele name, weight], ...]]
+const GENE_DATA = [
+  ['trunkThickness', 'Trunk thickness', 'trunk', [['Slender', 25], ['Sturdy', 35], ['Thick', 25], ['Stout', 12], ['Massive Trunk', 3]]],
+  ['trunkHeight', 'Trunk height', 'trunk', [['Stunted', 10], ['Low', 20], ['Medium', 35], ['Tall', 25], ['Towering', 8], ['Skyward', 2]]],
+  ['barkTexture', 'Bark texture', 'trunk', [['Smooth', 20], ['Furrowed', 30], ['Scaled', 15], ['Papery', 15], ['Mossy', 12], ['Gnarled', 8]]],
+  ['trunkColor', 'Bark color', 'trunk', [['Umber', 30], ['Ash Grey', 20], ['Silver', 12], ['Mahogany', 18], ['Ivory', 8], ['Obsidian', 7], ['Moonstone', 3], ['Sun-Gilded', 2]]],
+  ['branching', 'Branching', 'trunk', [['Single Stem', 8], ['Forked', 30], ['Open Crown', 25], ['Dense Branching', 20], ['Candelabra', 10], ['Spiral Branching', 7]]],
+  ['aerialRoots', 'Aerial roots', 'trunk', [['None', 60], ['Few', 25], ['Dangling', 10], ['Cascading', 5]]],
+  ['buttressRoots', 'Buttress roots', 'trunk', [['None', 55], ['Low Buttress', 30], ['Great Buttress', 12], ['Cathedral Roots', 3]]],
+  ['trunkCount', 'Trunk count', 'trunk', [['Single', 70], ['Twin', 20], ['Triple', 8], ['Clustered', 2]]],
+  ['trunkTwist', 'Trunk shape', 'trunk', [['Straight', 50], ['Gentle Curve', 28], ['Twisted', 15], ['Corkscrew', 5], ['Ancient Spiral', 2]]],
+
+  ['leafShape', 'Leaf shape', 'foliage', [['Oval', 22], ['Heart', 18], ['Lanceolate', 16], ['Palmate', 12], ['Round', 14], ['Feathery', 10], ['Star-Lobed', 6], ['Ginkgo Fan', 2]]],
+  ['leafSize', 'Leaf size', 'foliage', [['Tiny', 15], ['Small', 25], ['Medium', 30], ['Large', 20], ['Enormous', 10]]],
+  ['foliageDensity', 'Foliage density', 'foliage', [['Sparse', 15], ['Airy', 25], ['Lush', 35], ['Dense', 18], ['Impenetrable', 7]]],
+  ['leafPalette', 'Leaf palette', 'foliage', [['Verdant', 25], ['Sage', 18], ['Jade', 14], ['Olive', 12], ['Emerald', 10], ['Teal', 8], ['Plum', 4], ['Crimson', 3], ['Amber', 3], ['Silver-Blue', 2], ['Violet', 1]]],
+  ['seasonalShift', 'Seasonal shift', 'foliage', [['Evergreen', 40], ['Autumn Blush', 25], ['Dawn Gradient', 15], ['Frostbitten', 11.5], ['Blossom Cycle', 6.7], ['Golden Leaves', 1.8]]],
+  ['leafArrangement', 'Leaf arrangement', 'foliage', [['Alternate', 35], ['Opposite', 25], ['Whorled', 15], ['Rosette', 12], ['Spiraled', 9], ['Clustered', 4]]],
+  ['foliageType', 'Foliage type', 'foliage', [['Broadleaf', 50], ['Needle', 25], ['Scale', 10], ['Fern Frond', 10], ['Ribbon', 4], ['Glass Needle', 1]]],
+  ['crownPattern', 'Crown pattern', 'foliage', [['Clumped', 25], ['Even Spread', 25], ['Tiered Leaves', 15], ['Wispy', 15], ['Tufted', 10], ['Veiled', 10]]],
+  ['leafEdge', 'Leaf edge', 'foliage', [['Smooth', 40], ['Serrated', 25], ['Lobed', 15], ['Frilled', 10], ['Spiked Edge', 7], ['Lace', 3]]],
+
+  ['flowerPresence', 'Flowering', 'flower', [['None', 30], ['Sparse', 25], ['Common', 25], ['Profuse', 15], ['Overwhelming', 5]]],
+  ['flowerSize', 'Flower size', 'flower', [['Tiny', 30], ['Small', 30], ['Medium', 25], ['Large', 12], ['Giant Blossom', 3]]],
+  ['petalCount', 'Petal count', 'flower', [['3', 15], ['5', 35], ['8', 20], ['12', 15], ['20', 8], ['40', 5], ['Fractal', 2]]],
+  ['flowerColor', 'Flower color', 'flower', [['White', 18], ['Pink', 18], ['Lilac', 12], ['Yellow', 14], ['Coral', 10], ['Red', 8], ['Blue', 8], ['Indigo', 4], ['Silver', 3], ['Black Velvet', 2], ['Opal', 2], ['Rainbow', 1]]],
+  ['bloomStyle', 'Bloom style', 'flower', [['Open Cup', 30], ['Bell', 20], ['Star', 20], ['Tubular', 12], ['Spiral Bloom', 9], ['Cluster Spray', 9]]],
+  ['fragrance', 'Fragrance', 'flower', [['Faint', 35], ['Sweet', 25], ['Spiced', 15], ['Heady', 12], ['Resinous', 8], ['Mystic', 5]]],
+  ['bioluminescentFlowers', 'Bioluminescent flowers', 'flower', [['None', 99.3], ['Bioluminescent', 0.7]]],
+
+  ['fruitType', 'Fruit type', 'fruit', [['None', 30], ['Berries', 20], ['Pods', 12], ['Drupes', 10], ['Orbs', 10], ['Nuts', 8], ['Starfruit', 6], ['Lanterns', 4]]],
+  ['fruitColor', 'Fruit color', 'fruit', [['Scarlet', 22], ['Gold', 18], ['Violet', 14], ['Cream', 12], ['Blue-black', 12], ['Pearl', 8], ['Ruby', 6], ['Ember Glow', 4], ['Jade', 4]]],
+  ['fruitSize', 'Fruit size', 'fruit', [['Tiny', 35], ['Small', 30], ['Medium', 20], ['Large', 12], ['Huge', 3]]],
+  ['fruitCount', 'Fruit count', 'fruit', [['Single', 25], ['Handful', 30], ['Bunches', 25], ['Abundant', 15], ['Bountiful', 5]]],
+  ['fruitArrangement', 'Fruit arrangement', 'fruit', [['Scattered', 30], ['Hanging', 25], ['Crowned', 15], ['Garland', 15], ['Spiral', 10], ['Constellation', 5]]],
+
+  ['silhouette', 'Silhouette', 'form', [['Upright', 20], ['Weeping', 14], ['Sprawling', 14], ['Columnar', 12], ['Umbrella', 12], ['Bonsai', 10], ['Cloud-Dome', 9], ['Spiral Spire', 5], ['Hanging Tiers', 4]]],
+  ['lean', 'Lean', 'form', [['Straight', 60], ['Leaning', 25], ['Heavy Lean', 10], ['Zigzag', 5]]],
+  ['symmetry', 'Symmetry', 'form', [['Symmetrical', 55], ['Asymmetrical', 35], ['Chaotic', 10]]],
+  ['canopyTiers', 'Canopy tiers', 'form', [['Single Layer', 45], ['Two Tiers', 30], ['Three Tiers', 15], ['Pagoda', 8], ['Floating Tiers', 2]]],
+
+  ['glowAura', 'Aura', 'special', [['None', 90], ['Faint Halo', 6], ['Ember Glow', 2.5], ['Moonlight Aura', 1.5]]],
+  ['crystalline', 'Crystalline', 'special', [['None', 93], ['Crystal Tips', 5], ['Crystal Veins', 1.8], ['Fully Crystalline', 0.2]]],
+  ['floating', 'Floating', 'special', [['Grounded', 96], ['Hovering Roots', 2.5], ['Levitating', 1.2], ['Ethereal Float', 0.3]]],
+  ['ethereal', 'Ethereal', 'special', [['Solid', 93], ['Misty', 5], ['Phantom', 1.8], ['Spectral', 0.2]]],
+  ['ancient', 'Age', 'special', [['Young', 60], ['Mature', 25], ['Aged', 10], ['Ancient', 4], ['Primordial', 1]]],
+  ['symbiosis', 'Symbiosis', 'special', [['None', 80], ['Vine-Covered', 10], ['Mushroom Caps', 6], ['Mushroom Symbiont', 3], ['Lichen Crown', 1]]],
+
+  ['thorns', 'Thorns', 'unique', [['None', 62], ['Few Thorns', 18], ['Thorny', 12], ['Spiny', 6], ['Razor Thorns', 2]]],
+  ['particleEffect', 'Particles', 'unique', [['None', 70], ['Pollen', 12], ['Falling Petals', 8], ['Glowing Spores', 5], ['Light Rays', 3], ['Fireflies', 1.5], ['Starlight Motes', 0.5]]],
+  ['barkPattern', 'Bark pattern', 'unique', [['Plain', 35], ['Spotted', 20], ['Striped', 15], ['Runic', 10], ['Eye Knots', 6], ['Marbled', 9], ['Veined Glow', 5]]],
+  ['leafGradient', 'Leaf gradient', 'unique', [['Mono', 45], ['Two-tone', 30], ['Radial', 15], ['Iridescent', 8], ['Aurora', 2]]],
+  ['mossCover', 'Moss cover', 'unique', [['Bare', 45], ['Patchy Moss', 25], ['Lush Moss', 15], ['Lichen Shelves', 8], ['Velvet Moss', 5], ['Glowing Moss', 2]]],
+];
+
+// Derive per-allele probability p = w / sum(w) within the gene, and bits = -log2(p).
+const GENES = Object.freeze(GENE_DATA.map(([key, label, group, rows], i) => {
+  const total = rows.reduce((sum, row) => sum + row[1], 0);
+  const alleles = rows.map(([name, w], j) => {
+    const p = w / total;
+    return Object.freeze({ i: j, name, w, p, bits: -Math.log2(p) });
+  });
+  return Object.freeze({ i, key, label, group, alleles: Object.freeze(alleles) });
+}));
+if (GENES.length !== GENE_COUNT) throw new Error(`gene catalogue has ${GENES.length} genes, expected ${GENE_COUNT}`);
+
+EG.GENE_GROUPS = GENE_GROUPS;
+EG.GENE_COUNT = GENE_COUNT;
+EG.GENES = GENES;
+
+/* ---------- Seeded randomness and hashing ---------- */
+// mulberry32: small and fast. Each call returns a number in [0, 1).
+function rngFrom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// FNV-1a, 32-bit. Seeds the layout and the name from a genome.
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/* ---------- Sampling, rarity, and tiers ---------- */
+// Draw one allele per gene, each by its weight.
+function sampleGenome(rng) {
+  return GENES.map((gene) => {
+    const r = rng();
+    let acc = 0;
+    for (const allele of gene.alleles) {
+      acc += allele.p;
+      if (r < acc) return allele.i;
+    }
+    return gene.alleles[gene.alleles.length - 1].i;
+  });
+}
+
+// Tier thresholds on the 0 to 100 rarity score (spec section 5).
+const TIERS = Object.freeze([
+  Object.freeze({ id: 'common', label: 'Common', min: 0 }),
+  Object.freeze({ id: 'uncommon', label: 'Uncommon', min: 60 }),
+  Object.freeze({ id: 'rare', label: 'Rare', min: 85 }),
+  Object.freeze({ id: 'epic', label: 'Epic', min: 95 }),
+  Object.freeze({ id: 'legendary', label: 'Legendary', min: 99 }),
+  Object.freeze({ id: 'mythic', label: 'Mythic', min: 99.7 }),
+]);
+
+// Count of sorted values <= x (binary search for the upper bound).
+function countAtMost(sorted, x) {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid] <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+// Calibration population: 10,000 random genomes from a fixed seed, sorted once at load.
+const CAL = (() => {
+  const rng = rngFrom(0x5eed);
+  const bits = new Float64Array(10000);
+  for (let k = 0; k < bits.length; k++) {
+    const genes = sampleGenome(rng);
+    let total = 0;
+    for (let i = 0; i < GENE_COUNT; i++) total += GENES[i].alleles[genes[i]].bits;
+    bits[k] = total;
+  }
+  return bits.sort();
+})();
+
+// Analyze a genome: alleles, surprisal in bits, score and tier, seed, and notable traits (p < 0.12).
+function analyze(genes) {
+  if (!Array.isArray(genes) || genes.length !== GENE_COUNT) throw new Error(`analyze expects ${GENE_COUNT} allele indices`);
+  const alleles = GENES.map((gene, i) => {
+    const allele = gene.alleles[genes[i]];
+    if (!allele) throw new Error(`gene ${gene.key} has no allele ${genes[i]}`);
+    return allele;
+  });
+  const bits = alleles.reduce((sum, a) => sum + a.bits, 0);
+  const score = (100 * countAtMost(CAL, bits)) / CAL.length;
+  const tier = TIERS.reduce((best, t) => (score >= t.min ? t : best), TIERS[0]);
+  const notable = [];
+  GENES.forEach((gene, i) => {
+    if (alleles[i].p < 0.12) notable.push({ gene, allele: alleles[i] });
+  });
+  notable.sort((x, y) => x.allele.w - y.allele.w);
+  return {
+    alleles,
+    bits,
+    score,
+    tier: { id: tier.id, label: tier.label },
+    seed: fnv1a(genes.join(',')),
+    notable,
+  };
+}
+
+EG.rngFrom = rngFrom;
+EG.fnv1a = fnv1a;
+EG.sampleGenome = sampleGenome;
+EG.analyze = analyze;
+EG.TIERS = TIERS;
+EG.CAL = CAL;
+
+/* ---------- Breeding, mutation, and forecast (spec section 6) ---------- */
+// Record ids identify records only. They never affect gameplay.
+function newId() {
+  return `p${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
+}
+
+// Choose among alleles, favoring rare ones with weight 1 / sqrt(w).
+function pickRare(candidates, rng) {
+  let total = 0;
+  for (const a of candidates) total += 1 / Math.sqrt(a.w);
+  let r = rng() * total;
+  for (const a of candidates) {
+    r -= 1 / Math.sqrt(a.w);
+    if (r < 0) return a;
+  }
+  return candidates[candidates.length - 1];
+}
+
+// Offspring genome. Per gene: parents agree (origin 2), or the child takes A with pA in [0.40, 0.60], else B.
+// Then mutation: chance mu in [0.05, 0.12]; one hit (80%) or two (20%), each on one gene.
+function breed(genesA, genesB, rng) {
+  const genes = new Array(GENE_COUNT);
+  const origin = new Array(GENE_COUNT);
+  for (let i = 0; i < GENE_COUNT; i++) {
+    if (genesA[i] === genesB[i]) {
+      genes[i] = genesA[i];
+      origin[i] = 2;
+      continue;
+    }
+    const pA = 0.4 + 0.2 * rng();
+    const fromA = rng() < pA;
+    genes[i] = fromA ? genesA[i] : genesB[i];
+    origin[i] = fromA ? 0 : 1;
+  }
+  const mutationChance = 0.05 + 0.07 * rng();
+  const mutations = [];
+  if (rng() < mutationChance) {
+    const hits = rng() < 0.2 ? 2 : 1;
+    for (let h = 0; h < hits; h++) {
+      const g = Math.floor(rng() * GENE_COUNT);
+      if (mutations.some((m) => m.gene === g)) continue;
+      const gene = GENES[g];
+      let candidates = gene.alleles.filter((a) => a.i !== genesA[g] && a.i !== genesB[g]);
+      if (candidates.length === 0) candidates = gene.alleles.filter((a) => a.i !== genes[g]);
+      const chosen = pickRare(candidates, rng);
+      genes[g] = chosen.i;
+      origin[g] = 3;
+      mutations.push({ gene: g, allele: chosen.i });
+    }
+  }
+  return { genes, origin, mutations, mutationChance };
+}
+
+// Traits a child can inherit: shared alleles are certain; otherwise about 50% per parent.
+// Lists notable alleles (p < 0.12), rarest first.
+function forecast(genesA, genesB) {
+  const out = [];
+  for (const gene of GENES) {
+    const a = gene.alleles[genesA[gene.i]];
+    const b = gene.alleles[genesB[gene.i]];
+    if (a.i === b.i) {
+      if (a.p < 0.12) out.push({ gene, allele: a, chance: 1, src: 'shared' });
+    } else {
+      if (a.p < 0.12) out.push({ gene, allele: a, chance: 0.5, src: 'A' });
+      if (b.p < 0.12) out.push({ gene, allele: b, chance: 0.5, src: 'B' });
+    }
+  }
+  return out.sort((x, y) => x.allele.w - y.allele.w);
+}
+
+// Parent snapshot kept on a hybrid, so lineage survives deleting the parent.
+function snapshot(record) {
+  return {
+    id: record.id,
+    name: record.name,
+    genus: { pre: record.genus.pre, suf: record.genus.suf },
+    gen: record.gen || 0,
+    genes: record.genes.slice(),
+  };
+}
+
+// Hybrid record (not yet stored): breeds the genomes, names the child, and records lineage.
+function makeHybrid(recordA, recordB, rng) {
+  const child = breed(recordA.genes, recordB.genes, rng);
+  const analysis = analyze(child.genes);
+  const { name, genus } = hybridName(recordA, recordB, analysis, rng);
+  return {
+    id: newId(),
+    name,
+    genus,
+    genes: child.genes,
+    createdAt: Date.now(),
+    fav: false,
+    gen: Math.max(recordA.gen || 0, recordB.gen || 0) + 1,
+    parents: [snapshot(recordA), snapshot(recordB)],
+    origin: child.origin,
+    mutations: child.mutations,
+    mutationChance: child.mutationChance,
+  };
+}
+
+EG.newId = newId;
+EG.breed = breed;
+EG.forecast = forecast;
+EG.makeHybrid = makeHybrid;
+
+
+/* ===== Naming ===== */
+/* ---------- Procedural names (spec section 7) ---------- */
+// Genus = prefix + suffix. Pure plants may take an adjective epithet, placed before the genus.
+// Legendary and Mythic always take a legend phrase, placed after the genus.
+const PREFIXES = Object.freeze(['Lumi', 'Shade', 'Ember', 'Moon', 'Silk', 'Thorn', 'Aster', 'Velvet', 'Nyx', 'Cinder', 'Frost', 'Ivy', 'Sable', 'Gilt', 'Mire', 'Opal', 'Briar', 'Halo', 'Dusk', 'Pearl', 'Wisp', 'Ash', 'Rune', 'Fern', 'Lark', 'Myrrh', 'Sol', 'Tide', 'Vale', 'Corin', 'Amara', 'Ilex', 'Selene', 'Vesper', 'Lysa', 'Maren', 'Oriel', 'Quill', 'Ravel', 'Sylva']);
+const SUFFIXES = Object.freeze(['nara', 'veil', 'root', 'thorn', 'bloom', 'wisp', 'glade', 'dew', 'crest', 'spire', 'lune', 'mere', 'frond', 'bark', 'ling', 'ora', 'ia', 'ell', 'orn', 'wyn', 'loom', 'gleam', 'mantle', 'hollow', 'bell', 'tide', 'fall', 'whisper', 'ana', 'ine', 'ara']);
+const EPITHETS = Object.freeze(['Gentle', 'Quiet', 'Silver', 'Wild', 'Hollow', 'Amber', 'Pale', 'Gilded', 'Hushed', 'Sunward', 'Starlit', 'Tidal', 'Mistbound', 'Verdant', 'Nightbloom', 'Ashen', 'Pearled', 'Lantern', 'Dawnlit', 'Moonlit', 'Rimed', 'Glasswing', 'Umbral', 'Candled', 'Emberlit']);
+const LEGEND_EPITHETS = Object.freeze(['of the Hollow Sun', 'the Everbloom', 'of Forgotten Dawns', 'the Starbearer', 'of the Deep Glade', 'Eternal', 'of the Vesper Gate', 'the Unfading']);
+
+function pick(rng, list) {
+  return list[Math.floor(rng() * list.length)];
+}
+
+function genusText(genus) {
+  return genus.pre + genus.suf;
+}
+
+// Epithet rules: Legendary and Mythic always take a legend phrase; other tiers take an adjective 45% of the time.
+function applyEpithet(base, tierId, rng) {
+  if (tierId === 'legendary' || tierId === 'mythic') return `${base} ${pick(rng, LEGEND_EPITHETS)}`;
+  if (rng() < 0.45) return `${pick(rng, EPITHETS)} ${base}`;
+  return base;
+}
+
+// Pure plant name. A pure function of the genome seed, so one genome always gets one name.
+function pureName(analysis) {
+  const rng = rngFrom(fnv1a(`name:${analysis.seed}`));
+  const genus = { pre: pick(rng, PREFIXES), suf: pick(rng, SUFFIXES) };
+  return { name: applyEpithet(genusText(genus), analysis.tier.id, rng), genus };
+}
+
+// Hybrid name. Half the time "A × B" from the parents' genera; otherwise a blended genus.
+// The hybrid genus is always the parents' blend (A's prefix + B's suffix), so later crosses keep it.
+function hybridName(recordA, recordB, analysis, rng) {
+  const genus = { pre: recordA.genus.pre, suf: recordB.genus.suf };
+  if (rng() < 0.5) {
+    const pair = `${genusText(recordA.genus)} × ${genusText(recordB.genus)}`;
+    const legendary = analysis.tier.id === 'legendary' || analysis.tier.id === 'mythic';
+    return { name: legendary ? `${pair} ${pick(rng, LEGEND_EPITHETS)}` : pair, genus };
+  }
+  return { name: applyEpithet(genusText(genus), analysis.tier.id, rng), genus };
+}
+
+EG.PREFIXES = PREFIXES;
+EG.SUFFIXES = SUFFIXES;
+EG.EPITHETS = EPITHETS;
+EG.LEGEND_EPITHETS = LEGEND_EPITHETS;
+EG.pureName = pureName;
+EG.hybridName = hybridName;
+
+
+/* ===== Layout ===== */
+/* ---------- Visual values per allele (read by Layout and Renderer) ---------- */
+// Keyed by gene key, then allele name. Numbers are scales or counts. Strings are shape, color, or effect ids.
+const VISUALS = {
+  trunkThickness: { 'Slender': 0.55, 'Sturdy': 0.8, 'Thick': 1, 'Stout': 1.2, 'Massive Trunk': 1.5 },
+  trunkHeight: { 'Stunted': 0.36, 'Low': 0.5, 'Medium': 0.66, 'Tall': 0.8, 'Towering': 0.92, 'Skyward': 1.04 },
+  barkTexture: { 'Smooth': 'smooth', 'Furrowed': 'furrow', 'Scaled': 'scale', 'Papery': 'paper', 'Mossy': 'moss', 'Gnarled': 'gnarl' },
+  trunkColor: { 'Umber': '#6e4b2f', 'Ash Grey': '#8d8c87', 'Silver': '#bcc4c8', 'Mahogany': '#7b3b26', 'Ivory': '#e8dcc4', 'Obsidian': '#2e2c34', 'Moonstone': '#aebfdc', 'Sun-Gilded': '#cfa450' },
+  branching: {
+    'Single Stem': { k: [1, 2], d: 3, s: 0.18, l: 0.78, tw: 0 },
+    'Forked': { k: [2, 2], d: 4, s: 0.5, l: 0.74, tw: 0 },
+    'Open Crown': { k: [2, 3], d: 4, s: 0.85, l: 0.72, tw: 0 },
+    'Dense Branching': { k: [3, 3], d: 4, s: 0.7, l: 0.7, tw: 0 },
+    'Candelabra': { k: [3, 4], d: 3, s: 1, l: 0.66, tw: 0 },
+    'Spiral Branching': { k: [2, 3], d: 5, s: 0.6, l: 0.7, tw: 0.35 },
+  },
+  aerialRoots: { 'None': 0, 'Few': 3, 'Dangling': 6, 'Cascading': 11 },
+  buttressRoots: { 'None': 0, 'Low Buttress': 1, 'Great Buttress': 2, 'Cathedral Roots': 3 },
+  trunkCount: { 'Single': 1, 'Twin': 2, 'Triple': 3, 'Clustered': 5 },
+  trunkTwist: { 'Straight': 0, 'Gentle Curve': 0.22, 'Twisted': 0.5, 'Corkscrew': 0.85, 'Ancient Spiral': 1.25 },
+  leafShape: { 'Oval': 'oval', 'Heart': 'heart', 'Lanceolate': 'lance', 'Palmate': 'palm', 'Round': 'round', 'Feathery': 'feather', 'Star-Lobed': 'star', 'Ginkgo Fan': 'fan' },
+  leafSize: { 'Tiny': 0.5, 'Small': 0.7, 'Medium': 1, 'Large': 1.35, 'Enormous': 1.8 },
+  foliageDensity: { 'Sparse': 0.45, 'Airy': 0.7, 'Lush': 1, 'Dense': 1.3, 'Impenetrable': 1.6 },
+  leafPalette: {
+    'Verdant': ['#2f7d43', '#8fd18a'], 'Sage': ['#64845c', '#b7cfa4'], 'Jade': ['#23765f', '#7fd3b5'],
+    'Olive': ['#5f6e2a', '#b3bf62'], 'Emerald': ['#11683f', '#4fc184'], 'Teal': ['#1b6470', '#5fbfc6'],
+    'Plum': ['#4d2452', '#b06fb0'], 'Crimson': ['#7d1d2c', '#e0606c'], 'Amber': ['#a8621a', '#f2b35a'],
+    'Silver-Blue': ['#4f6f8f', '#c2dcef'], 'Violet': ['#4b3d92', '#a79af0'],
+  },
+  seasonalShift: { 'Evergreen': 'evergreen', 'Autumn Blush': 'blush', 'Dawn Gradient': 'dawn', 'Frostbitten': 'frost', 'Blossom Cycle': 'blossom', 'Golden Leaves': 'gold' },
+  leafArrangement: { 'Alternate': 'alt', 'Opposite': 'opp', 'Whorled': 'whorl', 'Rosette': 'rosette', 'Spiraled': 'spiral', 'Clustered': 'tight' },
+  foliageType: { 'Broadleaf': 'broad', 'Needle': 'needle', 'Scale': 'scale', 'Fern Frond': 'frond', 'Ribbon': 'ribbon', 'Glass Needle': 'glass' },
+  crownPattern: { 'Clumped': 'clump', 'Even Spread': 'even', 'Tiered Leaves': 'tier', 'Wispy': 'wisp', 'Tufted': 'tuft', 'Veiled': 'veil' },
+  leafEdge: { 'Smooth': 'smooth', 'Serrated': 'serrated', 'Lobed': 'lobed', 'Frilled': 'frilled', 'Spiked Edge': 'spiked', 'Lace': 'lace' },
+  flowerPresence: { 'None': 0, 'Sparse': 0.18, 'Common': 0.4, 'Profuse': 0.7, 'Overwhelming': 0.95 },
+  flowerSize: { 'Tiny': 0.55, 'Small': 0.75, 'Medium': 1, 'Large': 1.3, 'Giant Blossom': 1.75 },
+  petalCount: { '3': 3, '5': 5, '8': 8, '12': 12, '20': 20, '40': 40, 'Fractal': 60 },
+  flowerColor: {
+    'White': ['#f8f4ea', '#ffffff'], 'Pink': ['#ec8aa6', '#ffc4d4'], 'Lilac': ['#a98bd8', '#dcc8ff'],
+    'Yellow': ['#eec13f', '#fff2a0'], 'Coral': ['#ef7f5f', '#ffc1a6'], 'Red': ['#c8353f', '#ff8a8a'],
+    'Blue': ['#4a76cc', '#a2c8ff'], 'Indigo': ['#343a95', '#8288e6'], 'Silver': ['#bcc8d4', '#f4f8fb'],
+    'Black Velvet': ['#241529', '#6a3d74'], 'Opal': ['#e6d2ff', '#c4f5ea'], 'Rainbow': 'rainbow',
+  },
+  bloomStyle: { 'Open Cup': 'cup', 'Bell': 'bell', 'Star': 'star', 'Tubular': 'tube', 'Spiral Bloom': 'spiral', 'Cluster Spray': 'spray' },
+  fragrance: { 'Faint': 0, 'Sweet': 1, 'Spiced': 2, 'Heady': 3, 'Resinous': 4, 'Mystic': 5 },
+  bioluminescentFlowers: { 'None': 0, 'Bioluminescent': 1 },
+  fruitType: { 'None': 'none', 'Berries': 'berry', 'Pods': 'pod', 'Drupes': 'drupe', 'Orbs': 'orb', 'Nuts': 'nut', 'Starfruit': 'star', 'Lanterns': 'lantern' },
+  fruitColor: { 'Scarlet': '#d4463d', 'Gold': '#e6b53e', 'Violet': '#7b4eb2', 'Cream': '#f2e7c9', 'Blue-black': '#25324a', 'Pearl': '#e9eff3', 'Ruby': '#a0163b', 'Ember Glow': '#ff7b2f', 'Jade': '#3ea67b' },
+  fruitSize: { 'Tiny': 0.55, 'Small': 0.78, 'Medium': 1, 'Large': 1.3, 'Huge': 1.7 },
+  fruitCount: { 'Single': 1, 'Handful': 3, 'Bunches': 6, 'Abundant': 10, 'Bountiful': 16 },
+  fruitArrangement: { 'Scattered': 'scatter', 'Hanging': 'hang', 'Crowned': 'crown', 'Garland': 'garland', 'Spiral': 'spiral', 'Constellation': 'const' },
+  silhouette: {
+    'Upright': { up: 0.25, dr: 0, sp: 0.7 }, 'Weeping': { up: 0, dr: 0.45, sp: 0.9 },
+    'Sprawling': { up: -0.05, dr: 0.05, sp: 1.25 }, 'Columnar': { up: 0.5, dr: 0, sp: 0.35 },
+    'Umbrella': { up: -0.15, dr: 0.1, sp: 1.15, flat: true }, 'Bonsai': { up: 0, dr: 0.15, sp: 0.8, lenK: 0.6 },
+    'Cloud-Dome': { up: 0, dr: 0, sp: 1, dome: true }, 'Spiral Spire': { up: 0.3, dr: 0, sp: 0.55, tw: 0.5 },
+    'Hanging Tiers': { up: -0.05, dr: 0.35, sp: 1 },
+  },
+  lean: { 'Straight': { a: 0, zig: false }, 'Leaning': { a: 0.2, zig: false }, 'Heavy Lean': { a: 0.42, zig: false }, 'Zigzag': { a: 0.6, zig: true } },
+  symmetry: { 'Symmetrical': 0, 'Asymmetrical': 0.45, 'Chaotic': 0.9 },
+  canopyTiers: { 'Single Layer': 1, 'Two Tiers': 2, 'Three Tiers': 3, 'Pagoda': 4, 'Floating Tiers': 5 },
+  glowAura: { 'None': null, 'Faint Halo': '#f5e9b8', 'Ember Glow': '#ff9a4a', 'Moonlight Aura': '#9cc8ff' },
+  crystalline: { 'None': 0, 'Crystal Tips': 1, 'Crystal Veins': 2, 'Fully Crystalline': 3 },
+  floating: { 'Grounded': 0, 'Hovering Roots': 0.05, 'Levitating': 0.1, 'Ethereal Float': 0.16 },
+  ethereal: { 'Solid': 1, 'Misty': 0.85, 'Phantom': 0.7, 'Spectral': 0.55 },
+  ancient: { 'Young': 0, 'Mature': 1, 'Aged': 2, 'Ancient': 3, 'Primordial': 4 },
+  symbiosis: { 'None': 'none', 'Vine-Covered': 'vine', 'Mushroom Caps': 'mush', 'Mushroom Symbiont': 'mushsym', 'Lichen Crown': 'lichen' },
+  thorns: { 'None': 0, 'Few Thorns': 6, 'Thorny': 14, 'Spiny': 26, 'Razor Thorns': 40 },
+  particleEffect: { 'None': null, 'Pollen': 'pollen', 'Falling Petals': 'petals', 'Glowing Spores': 'spores', 'Light Rays': 'rays', 'Fireflies': 'fire', 'Starlight Motes': 'stars' },
+  barkPattern: { 'Plain': 'plain', 'Spotted': 'spot', 'Striped': 'stripe', 'Runic': 'rune', 'Eye Knots': 'eye', 'Marbled': 'marble', 'Veined Glow': 'vein' },
+  leafGradient: { 'Mono': 'mono', 'Two-tone': 'two', 'Radial': 'radial', 'Iridescent': 'irid', 'Aurora': 'aurora' },
+  mossCover: { 'Bare': 'bare', 'Patchy Moss': 'patchy', 'Lush Moss': 'lush', 'Lichen Shelves': 'lichen', 'Velvet Moss': 'velvet', 'Glowing Moss': 'glow' },
+};
+
+// Traits of a genome, keyed by gene key: allele name, probability, and visual value.
+function traitsOf(genes) {
+  const out = {};
+  GENES.forEach((gene, i) => {
+    const allele = gene.alleles[genes[i]];
+    const v = VISUALS[gene.key][allele.name];
+    if (v === undefined) throw new Error(`no visual for ${gene.key} / ${allele.name}`);
+    out[gene.key] = { name: allele.name, p: allele.p, v };
+  });
+  return out;
+}
+
+/* ---------- Layout: deterministic plant structure from the genome seed ---------- */
+const NODE_BUDGET = 240;
+const TAU = Math.PI * 2;
+const MARK_COUNTS = { smooth: 0, furrow: 9, scale: 5, paper: 4, moss: 4, gnarl: 3 };
+const PATTERN_COUNTS = { plain: 0, spot: 3, stripe: 4, rune: 2, eye: 1, marble: 3, vein: 3 };
+const MOSS_COUNTS = { bare: 0, patchy: 3, lush: 6, lichen: 4, velvet: 5, glow: 4 };
+const MOSS_KIND = { patchy: 'moss', lush: 'moss', lichen: 'lichen', velvet: 'velvetmoss', glow: 'glowmoss' };
+const CRYSTAL_CHANCE = [0, 0.4, 0.2, 1];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Blend two hex colors into an rgb() string. t = 0 gives hexA, t = 1 gives hexB.
+function mixColor(hexA, hexB, t) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
+}
+
+// Tree of nodes from the base at (0, 0). y grows downward, so a plant reaches negative y.
+// Node and cluster geometry is at rest; the renderer applies sway and growth per frame.
+function buildLayout(genes, seed) {
+  const T = traitsOf(genes);
+  const rng = rngFrom(seed);
+  const L = {
+    nodes: [], clusters: [], trunkChain: [], marks: [], thorns: [], aerial: [],
+    buttress: [], mushrooms: [], vine: null, hover: T.floating.v, bounds: null,
+  };
+  const trunkHex = T.trunkColor.v;
+  const leafHex = T.leafPalette.v[0];
+  const canAdd = () => L.nodes.length < NODE_BUDGET;
+
+  function addNode(parent, depth, x, y, angle, length, w0, w1, birth) {
+    L.nodes.push({
+      parent, depth, x, y, angle, length, w0, w1,
+      ex: x + Math.cos(angle) * length,
+      ey: y + Math.sin(angle) * length,
+      phase: rng() * TAU,
+      freq: 0.6 + 0.6 * rng(),
+      sway: depth === 0 ? 0.008 : 0.02 + 0.025 * Math.min(depth, 5) / 5,
+      birth,
+      color: mixColor(trunkHex, leafHex, depth === 0 ? 0 : Math.min(0.6, 0.12 * depth)),
+    });
+    return L.nodes.length - 1;
+  }
+
+  // Silhouette: 'up' lifts children and 'dr' droops them. Flat and dome shapes stretch or narrow the crown.
+  function bendToSilhouette(angle) {
+    const sil = T.silhouette.v;
+    let vx = Math.cos(angle);
+    const vy = Math.sin(angle) + sil.dr * 0.9 - sil.up * 0.9;
+    if (sil.flat) vx *= 1.25;
+    if (sil.dome) vx *= 0.8;
+    return Math.atan2(vy, vx);
+  }
+
+  // Leaf cluster on node i. 'along' is the position on the node (1 is the tip). offX and offY offset it in the node frame.
+  function addCluster(i, along, offX, offY, angle) {
+    let leaves = Math.round((4 + 5 * T.foliageDensity.v) * (0.8 + 0.4 * rng()));
+    if (T.foliageType.v === 'needle' || T.foliageType.v === 'scale') leaves = Math.round(leaves * 1.6);
+    if (T.crownPattern.v === 'wisp') leaves = Math.max(3, Math.round(leaves * 0.7));
+    const radius = 0.075 * T.leafSize.v * (1.5 + 0.35 * Math.sqrt(leaves));
+    const flowers = rng() < T.flowerPresence.v ? 1 + Math.floor(rng() * 3) : 0;
+    const fruit = (T.fruitType.v !== 'none' && rng() < 0.55)
+      ? Math.min(12, Math.round(T.fruitCount.v * (0.4 + 0.9 * rng())))
+      : 0;
+    const crystalChance = CRYSTAL_CHANCE[T.crystalline.v];
+    L.clusters.push({
+      node: i, along, offX, offY, angle, radius, leaves, flowers, fruit,
+      seed: Math.floor(rng() * 4294967296),
+      birth: Math.min(0.95, L.nodes[i].birth + 0.25 + 0.2 * rng()),
+      crystal: crystalChance > 0 && rng() < crystalChance,
+    });
+  }
+
+  // Tip: one to three clusters, scaled by density. The crown pattern sets their spread.
+  function addTip(i) {
+    const spread = { wisp: 0.09, even: 0.05 }[T.crownPattern.v] || 0.025;
+    const count = Math.max(1, Math.min(3, Math.round(T.foliageDensity.v * (1 + 1.2 * rng()))));
+    for (let c = 0; c < count; c++) {
+      const offX = (rng() - 0.3) * spread * 0.6;
+      const offY = (rng() - 0.5) * spread + (T.crownPattern.v === 'veil' ? spread * 0.8 : 0);
+      const angle = T.crownPattern.v === 'tuft' ? (rng() - 0.5) * 0.8 : rng() * TAU;
+      addCluster(i, 1, offX, offY, angle);
+    }
+  }
+
+  // Branch: a tapered segment, then children until the depth limit, the length limit, or the node budget.
+  // The caller checks canAdd() before calling.
+  function grow(parent, x, y, angle, length, width, depth) {
+    const i = addNode(parent, depth, x, y, angle, length, width, width * 0.7, Math.min(0.6, 0.1 * depth + 0.08 * rng()));
+    const nd = L.nodes[i];
+    const br = T.branching.v;
+    if (depth >= br.d || length < 0.03) {
+      addTip(i);
+      return;
+    }
+    if (depth >= 2 && rng() < 0.3 * T.foliageDensity.v) addCluster(i, 0.55 + 0.25 * rng(), 0, 0, rng() * TAU);
+    const k = br.k[0] + Math.floor(rng() * (br.k[1] - br.k[0] + 1));
+    const sil = T.silhouette.v;
+    const spread = br.s * sil.sp;
+    for (let c = 0; c < k && canAdd(); c++) {
+      const u = k === 1 ? 0 : (2 * c) / (k - 1) - 1;
+      const sway = (c % 2 ? 1 : -1) * (br.tw * 0.5 + (sil.tw || 0) * 0.25);
+      const jitter = (rng() - 0.5) * 0.25 * (0.5 + T.symmetry.v);
+      const childAngle = bendToSilhouette(nd.angle + u * spread + sway + jitter);
+      const childLength = nd.length * br.l * (0.85 + 0.3 * rng()) * (sil.lenK || 1);
+      grow(i, nd.ex, nd.ey, childAngle, childLength, nd.w1 * 0.78, depth + 1);
+    }
+  }
+
+  // Trunk: four chained segments. Twist bends each segment, zigzag alternates, and whorls add laterals by canopy tier.
+  function growTrunk(x0, y0, angle0, length, width, side) {
+    const lean = T.lean.v;
+    const tiers = T.canopyTiers.v;
+    const segLength = length / 4;
+    let x = x0;
+    let y = y0;
+    let angle = angle0;
+    let w = width;
+    let prev = -1;
+    for (let s = 0; s < 4 && canAdd(); s++) {
+      if (s > 0) {
+        angle += side * T.trunkTwist.v * 0.16 + (lean.zig ? (s % 2 ? 1 : -1) * lean.a * 0.5 : 0) + (rng() - 0.5) * 0.05;
+      }
+      const i = addNode(prev, 0, x, y, angle, segLength * (0.92 + 0.16 * rng()), w, w * 0.9, 0.05 * s);
+      L.trunkChain.push(i);
+      x = L.nodes[i].ex;
+      y = L.nodes[i].ey;
+      w *= 0.9;
+      prev = i;
+      if (s >= 1 && s <= Math.min(3, tiers - 1)) {
+        for (const sign of [-1, 1]) {
+          if (!canAdd()) break;
+          const spreadAngle = (0.7 + 0.3 * rng()) * (tiers === 4 ? 1.1 : 1);
+          grow(i, x, y, angle + sign * spreadAngle, segLength * 0.9, w * 0.7, 1);
+        }
+      }
+    }
+    if (prev >= 0 && canAdd()) grow(prev, x, y, angle, segLength, w, 1);
+  }
+
+  const trunkLength = 0.22 + 0.5 * T.trunkHeight.v;
+  const baseWidth = 0.055 * T.trunkThickness.v;
+  for (let k = 0; k < T.trunkCount.v && canAdd(); k++) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const x0 = (k - (T.trunkCount.v - 1) / 2) * 0.075 * (1 + 0.3 * rng());
+    const angle0 = -Math.PI / 2 + side * T.lean.v.a * (0.6 + 0.4 * rng()) + (k ? (rng() - 0.5) * 0.25 : 0);
+    growTrunk(x0, 0, angle0, trunkLength * (k ? 0.85 : 1), baseWidth * (k ? 0.7 : 1), side);
+  }
+
+  // Features are placed on nodes after the tree is final. Each pool is chosen from node depth.
+  const scatter = (pool, count, make) => {
+    for (let m = 0; m < count && pool.length; m++) make(pool[Math.floor(rng() * pool.length)]);
+  };
+  const chain = L.trunkChain;
+  const branchNodes = [];
+  const deepNodes = [];
+  L.nodes.forEach((nd, i) => {
+    if (nd.depth >= 1) branchNodes.push(i);
+    if (nd.depth >= 2) deepNodes.push(i);
+  });
+  const markAt = (pool, kind, count) => scatter(pool, count, (n) => {
+    L.marks.push({ n, t: 0.08 + 0.84 * rng(), o: (rng() * 2 - 1) * 0.8, size: 0.6 + 0.6 * rng(), kind });
+  });
+  markAt(chain, T.barkTexture.v, MARK_COUNTS[T.barkTexture.v]);
+  markAt(chain, T.barkPattern.v, PATTERN_COUNTS[T.barkPattern.v]);
+  markAt(chain, MOSS_KIND[T.mossCover.v] || 'none', MOSS_COUNTS[T.mossCover.v]);
+  if (T.symbiosis.v === 'lichen') markAt(deepNodes, 'lichen', 4);
+  scatter(branchNodes, T.thorns.v, (n) => {
+    L.thorns.push({ n, t: 0.1 + 0.8 * rng(), side: rng() < 0.5 ? -1 : 1, size: 0.6 + 0.8 * rng() });
+  });
+  scatter(branchNodes.filter((i) => L.nodes[i].depth <= 2), T.aerialRoots.v, (n) => {
+    L.aerial.push({ n, t: 0.2 + 0.7 * rng(), len: 0.07 + 0.12 * rng(), bend: (rng() - 0.5) * 0.05, phase: rng() * TAU });
+  });
+  for (let b = 0; b < T.buttressRoots.v; b++) {
+    L.buttress.push({ side: b % 2 ? 1 : -1, length: 0.05 + 0.04 * rng(), width: 0.03 + 0.02 * rng() });
+  }
+  const shrooms = { mush: 4, mushsym: 6 }[T.symbiosis.v] || 0;
+  scatter(chain, shrooms, (n) => {
+    L.mushrooms.push({ n, t: 0.05 + 0.5 * rng(), side: rng() < 0.5 ? -1 : 1, size: 0.6 + 0.8 * rng() });
+  });
+  if (T.symbiosis.v === 'vine') L.vine = { chain: chain.slice(), strands: 2 + Math.floor(rng() * 2), phase: rng() * TAU };
+
+  // Bounds at rest. Cluster offsets are approximate, without the node rotation.
+  let minX = 0;
+  let maxX = 0;
+  let top = 0;
+  for (const nd of L.nodes) {
+    minX = Math.min(minX, nd.x, nd.ex);
+    maxX = Math.max(maxX, nd.x, nd.ex);
+    top = Math.min(top, nd.y, nd.ey);
+  }
+  for (const c of L.clusters) {
+    const nd = L.nodes[c.node];
+    const px = nd.x + (nd.ex - nd.x) * c.along + c.offX;
+    const py = nd.y + (nd.ey - nd.y) * c.along + c.offY;
+    minX = Math.min(minX, px - c.radius);
+    maxX = Math.max(maxX, px + c.radius);
+    top = Math.min(top, py - c.radius);
+  }
+  L.bounds = { minX, maxX, top };
+  return L;
+}
+
+EG.VISUALS = VISUALS;
+EG.traitsOf = traitsOf;
+EG.buildLayout = buildLayout;
+
+
+/* ===== Renderer ===== */
+/* ---------- Renderer: cluster sprites, per-frame drawing, and PlantView ---------- */
+// Cluster sprites are drawn at this fraction of display resolution, which keeps memory bounded on phones.
+const SPRITE_SCALE = 0.6;
+const FOLIAGE_SHAPE = { needle: 'needle', scale: 'scale', frond: 'frond', ribbon: 'ribbon', glass: 'glass' };
+const FOLIAGE_LENGTH = { needle: 1.3, frond: 1.4, ribbon: 1.6, glass: 1.1 };
+const BLOOM = {
+  cup: { w: 0.42, l: 0.55, off: 0.45, spin: 0 },
+  bell: { w: 0.5, l: 0.42, off: 0.35, spin: 0 },
+  star: { w: 0.16, l: 0.6, off: 0.6, spin: 0 },
+  tube: { w: 0.12, l: 0.42, off: 0.5, spin: 0 },
+  spiral: { w: 0.3, l: 0.55, off: 0.5, spin: 1 },
+  spray: { w: 0.3, l: 0.42, off: 0.5, spin: 0 },
+};
+const SEASON = {
+  blush: { mix: [217, 87, 43], amount: 0.5, chance: 0.35 },
+  dawn: { mix: [242, 167, 184], amount: 0.45, chance: 0.25 },
+  frost: { mix: [230, 244, 255], amount: 0.4, chance: 0.3 },
+};
+
+// Leaf half-width at x in [0, 1], in leaf-length units. Edge modifiers below shape the outline.
+const SHAPE_H = {
+  oval: (x) => 0.5 * Math.pow(Math.sin(Math.PI * x), 0.85),
+  heart: (x) => 0.5 * Math.pow(Math.sin(Math.PI * Math.pow(x, 0.75)), 0.9) * (1 - 0.45 * Math.exp(-14 * x)),
+  lance: (x) => 0.3 * Math.pow(Math.sin(Math.PI * x), 0.7) * (1 - 0.35 * x),
+  palm: (x) => 0.5 * Math.sin(Math.PI * x) * (0.62 + 0.38 * Math.abs(Math.cos(3 * Math.PI * x))),
+  round: (x) => 0.5 * Math.sqrt(Math.max(0, 1 - Math.pow(2 * x - 1, 2))),
+  feather: (x) => 0.16 * Math.pow(Math.sin(Math.PI * x), 0.6),
+  star: (x) => 0.5 * Math.sin(Math.PI * x) * (0.5 + 0.5 * Math.abs(Math.cos(2.5 * Math.PI * x))),
+  fan: (x) => 0.5 * Math.pow(x, 0.55) * (1 - 0.15 * x),
+  scale: (x) => 0.32 * Math.sqrt(Math.max(0, 1 - Math.pow(2 * x - 1, 2))),
+  needle: (x) => 0.03 + 0.012 * Math.sin(Math.PI * x),
+  frond: (x) => 0.12 * Math.pow(Math.sin(Math.PI * x), 0.5),
+  ribbon: (x) => 0.07 + 0.02 * Math.sin(6 * x),
+  glass: (x) => 0.2 * Math.pow(Math.sin(Math.PI * Math.pow(x, 0.6)), 1.2),
+};
+// Edge modifiers. i is the point index along one side, so serrations alternate on both sides.
+const EDGE_MOD = {
+  smooth: () => 1,
+  serrated: (x, i) => (i % 2 ? 0.8 : 1),
+  lobed: (x) => 1 + 0.18 * Math.sin(x * TAU * 2.5),
+  frilled: (x) => 1 + 0.12 * Math.sin(x * TAU * 7),
+  spiked: (x, i) => (i % 2 ? 0.7 : 1.12),
+  lace: (x) => 1 + 0.08 * Math.sin(x * TAU * 11),
+};
+const LEAF_OUTLINES = new Map();
+
+// Outline of a leaf as a flat [x0, y0, x1, y1, ...] array, computed once per shape and edge.
+function leafOutline(shape, edge) {
+  const key = `${shape}|${edge}`;
+  let pts = LEAF_OUTLINES.get(key);
+  if (pts) return pts;
+  const N = 14;
+  const h = SHAPE_H[shape] || SHAPE_H.oval;
+  const mod = EDGE_MOD[edge] || EDGE_MOD.smooth;
+  pts = new Float32Array(4 * (N + 1));
+  let k = 0;
+  for (let i = 0; i <= N; i++) {
+    const x = i / N;
+    pts[k++] = x;
+    pts[k++] = -h(x) * mod(x, i);
+  }
+  for (let i = N; i >= 0; i--) {
+    const x = i / N;
+    pts[k++] = x;
+    pts[k++] = h(x) * mod(x, i);
+  }
+  LEAF_OUTLINES.set(key, pts);
+  return pts;
+}
+
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function mixRgb(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function rgbStr(c, alpha) {
+  const r = Math.round(c[0]);
+  const g = Math.round(c[1]);
+  const b = Math.round(c[2]);
+  return alpha === undefined ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Eases in and overshoots slightly, so clusters pop into place as they grow.
+function easeOutBack(x) {
+  const c1 = 1.25;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+// Growth of a node or cluster born at 'birth', for growth value g in [0, 1].
+function growthOf(birth, g) {
+  const x = clamp01((g - birth) / 0.24);
+  return x * x * (3 - 2 * x);
+}
+
+// Render settings derived from the traits, shared by every cluster of one plant.
+function renderEnv(T) {
+  const season = T.seasonalShift.v;
+  const palette = season === 'gold' ? ['#b8862c', '#ffe08a'] : T.leafPalette.v;
+  const broad = T.foliageType.v === 'broad';
+  const fc = T.flowerColor.v;
+  return {
+    dark: hexToRgb(palette[0]),
+    light: hexToRgb(palette[1]),
+    shape: broad ? T.leafShape.v : FOLIAGE_SHAPE[T.foliageType.v],
+    edge: broad ? T.leafEdge.v : 'smooth',
+    lengthScale: FOLIAGE_LENGTH[T.foliageType.v] || 1,
+    leafLength: 0.075 * T.leafSize.v,
+    arrangement: T.leafArrangement.v,
+    gradient: T.leafGradient.v,
+    season,
+    blossom: season === 'blossom',
+    bloomName: T.bloomStyle.v,
+    petals: T.petalCount.v,
+    rainbow: fc === 'rainbow',
+    flowerColor: fc === 'rainbow' ? null : [hexToRgb(fc[0]), hexToRgb(fc[1])],
+    flowerSize: T.flowerSize.v,
+    glow: T.bioluminescentFlowers.v === 1,
+    fruit: T.fruitType.v,
+    fruitColor: hexToRgb(T.fruitColor.v),
+    fruitSize: T.fruitSize.v,
+    fruitArrangement: T.fruitArrangement.v,
+  };
+}
+
+// Leaves of one cluster: position, angle, length, tone, back or front layer, and season tint.
+function leafSpecs(c, env, rng) {
+  const n = c.leaves;
+  const r = c.radius;
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    let th;
+    let d;
+    let ang;
+    switch (env.arrangement) {
+      case 'alt':
+        th = -1.2 + 2.4 * (n > 1 ? k / (n - 1) : 0.5) + (rng() - 0.5) * 0.3;
+        d = r * (0.2 + 0.25 * rng());
+        ang = th + (rng() - 0.5) * 0.4;
+        break;
+      case 'opp': {
+        const side = k % 2 ? 1 : -1;
+        th = side * (0.8 + 0.2 * rng()) + (Math.floor(k / 2) / Math.max(1, n / 2) - 0.5) * 1.1;
+        d = r * (0.15 + 0.2 * rng());
+        ang = th + (rng() - 0.5) * 0.4;
+        break;
+      }
+      case 'whorl':
+        th = (TAU * k) / n + (rng() - 0.5) * 0.2;
+        d = r * 0.2;
+        ang = th;
+        break;
+      case 'rosette':
+        th = (TAU * k) / n;
+        d = r * (0.12 + 0.08 * rng());
+        ang = th;
+        break;
+      case 'spiral':
+        th = k * 2.39996;
+        d = r * 0.75 * Math.sqrt((k + 1) / n);
+        ang = th;
+        break;
+      default:
+        th = (rng() - 0.5) * 0.8;
+        d = r * 0.25 * rng();
+        ang = th + (rng() - 0.5) * 0.35;
+    }
+    const season = SEASON[env.season] && rng() < SEASON[env.season].chance ? env.season : null;
+    out.push({
+      x: Math.cos(th) * d,
+      y: Math.sin(th) * d,
+      ang,
+      len: env.leafLength * env.lengthScale * (0.75 + 0.5 * rng()),
+      tone: 0.25 + 0.7 * rng(),
+      back: rng() < 0.3,
+      season,
+    });
+  }
+  return out;
+}
+
+// Fill for one leaf, in the leaf's own unit space. The gradient mode comes from the leaf gradient gene.
+function leafFill(x, base, env) {
+  const light = mixRgb(base, env.light, 0.35);
+  const dark = mixRgb(base, env.dark, 0.5);
+  switch (env.gradient) {
+    case 'two': {
+      const g = x.createLinearGradient(0, -0.5, 0, 0.5);
+      g.addColorStop(0, rgbStr(light));
+      g.addColorStop(1, rgbStr(dark));
+      return g;
+    }
+    case 'radial': {
+      const g = x.createRadialGradient(0.3, 0, 0.02, 0.3, 0, 0.9);
+      g.addColorStop(0, rgbStr(light));
+      g.addColorStop(1, rgbStr(dark));
+      return g;
+    }
+    case 'irid': {
+      const g = x.createLinearGradient(0, 0, 1, 0);
+      g.addColorStop(0, rgbStr(base));
+      g.addColorStop(0.5, rgbStr(mixRgb(base, [127, 208, 255], 0.35)));
+      g.addColorStop(1, rgbStr(dark));
+      return g;
+    }
+    case 'aurora': {
+      const g = x.createLinearGradient(0, 0, 1, 0);
+      g.addColorStop(0, rgbStr(mixRgb(base, [79, 209, 197], 0.45)));
+      g.addColorStop(0.5, rgbStr(mixRgb(base, [139, 111, 224], 0.45)));
+      g.addColorStop(1, rgbStr(mixRgb(base, [242, 200, 107], 0.4)));
+      return g;
+    }
+    default:
+      return rgbStr(base);
+  }
+}
+
+function drawLeaf(x, s, env) {
+  const pts = leafOutline(env.shape, env.edge);
+  let base = mixRgb(env.dark, env.light, s.tone);
+  if (s.season) base = mixRgb(base, SEASON[s.season].mix, SEASON[s.season].amount);
+  x.save();
+  x.translate(s.x, s.y);
+  x.rotate(s.ang);
+  x.scale(s.len, s.len);
+  x.beginPath();
+  x.moveTo(pts[0], pts[1]);
+  for (let p = 2; p < pts.length; p += 2) x.lineTo(pts[p], pts[p + 1]);
+  x.closePath();
+  x.fillStyle = leafFill(x, base, env);
+  x.fill();
+  x.strokeStyle = s.back ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.16)';
+  x.lineWidth = 0.025;
+  x.beginPath();
+  x.moveTo(0.03, 0);
+  x.lineTo(0.9, 0);
+  x.stroke();
+  x.restore();
+}
+
+function drawFlower(x, cx, cy, size, env, rng) {
+  const spec = BLOOM[env.bloomName] || BLOOM.cup;
+  const count = env.bloomName === 'spray' ? 3 : 1;
+  const n = Math.min(24, Math.max(3, env.petals));
+  for (let m = 0; m < count; m++) {
+    const mx = count > 1 ? cx + (rng() - 0.5) * size * 2.4 : cx;
+    const my = count > 1 ? cy + (rng() - 0.5) * size * 2.4 : cy;
+    const s = count > 1 ? size * 0.55 : size;
+    if (env.glow) {
+      const g = x.createRadialGradient(mx, my, 0, mx, my, s * 3);
+      g.addColorStop(0, 'rgba(190,255,220,0.35)');
+      g.addColorStop(1, 'rgba(190,255,220,0)');
+      x.fillStyle = g;
+      x.beginPath();
+      x.arc(mx, my, s * 3, 0, TAU);
+      x.fill();
+    }
+    for (let p = 0; p < n; p++) {
+      const a = (TAU * p) / n + spec.spin * p * 0.12;
+      const col = env.rainbow ? `hsl(${(360 * p) / n},80%,72%)` : rgbStr(mixRgb(env.flowerColor[0], env.flowerColor[1], (p % 3) / 2));
+      x.save();
+      x.translate(mx + Math.cos(a) * s * spec.off, my + Math.sin(a) * s * spec.off);
+      x.rotate(a);
+      x.fillStyle = col;
+      x.beginPath();
+      x.ellipse(0, 0, s * spec.l, s * spec.w, 0, 0, TAU);
+      x.fill();
+      x.restore();
+    }
+    x.fillStyle = '#f2c94c';
+    x.beginPath();
+    x.arc(mx, my, s * 0.16, 0, TAU);
+    x.fill();
+  }
+}
+
+// Fruit position within a cluster of radius r, by arrangement.
+function fruitPos(arrangement, k, n, r, rng) {
+  switch (arrangement) {
+    case 'crown': {
+      const a = (TAU * k) / n;
+      return [Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6];
+    }
+    case 'garland': {
+      const a = Math.PI * 0.15 + Math.PI * 0.7 * (n > 1 ? k / (n - 1) : 0.5);
+      return [Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6 + r * 0.1];
+    }
+    case 'hang':
+      return [(k - (n - 1) / 2) * r * 0.22, r * (0.22 + 0.25 * rng())];
+    case 'spiral': {
+      const a = k * 2.39996;
+      const d = r * 0.6 * Math.sqrt((k + 1) / n);
+      return [Math.cos(a) * d, Math.sin(a) * d];
+    }
+    case 'const':
+      return [(rng() - 0.5) * r * 1.4, (rng() - 0.5) * r * 1.4];
+    default:
+      return [(rng() - 0.5) * r * 1.1, (rng() - 0.5) * r * 1.1];
+  }
+}
+
+function drawStar(x, cx, cy, r, points) {
+  for (let p = 0; p < points * 2; p++) {
+    const rad = p % 2 ? r * 0.45 : r;
+    const a = (Math.PI * p) / points - Math.PI / 2;
+    const px = cx + Math.cos(a) * rad;
+    const py = cy + Math.sin(a) * rad;
+    if (p === 0) x.moveTo(px, py);
+    else x.lineTo(px, py);
+  }
+  x.closePath();
+}
+
+function drawFruit(x, env, px, py, s, rng) {
+  if (env.fruitArrangement === 'hang') {
+    x.strokeStyle = 'rgba(70,50,30,0.6)';
+    x.lineWidth = s * 0.25;
+    x.beginPath();
+    x.moveTo(px, 0);
+    x.lineTo(px, py);
+    x.stroke();
+  }
+  if (env.fruit === 'orb') {
+    const g = x.createRadialGradient(px, py, 0, px, py, s * 2.6);
+    g.addColorStop(0, rgbStr(env.fruitColor, 0.45));
+    g.addColorStop(1, rgbStr(env.fruitColor, 0));
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(px, py, s * 2.6, 0, TAU);
+    x.fill();
+  }
+  x.fillStyle = rgbStr(env.fruitColor);
+  x.beginPath();
+  if (env.fruit === 'pod') {
+    x.ellipse(px, py, s * 1.6, s * 0.6, rng() * Math.PI, 0, TAU);
+  } else if (env.fruit === 'drupe') {
+    for (let d = -1; d <= 1; d++) {
+      const cy = py + (d === 0 ? -s * 0.5 : s * 0.2);
+      x.moveTo(px + d * s * 0.9 + s * 0.55, cy);
+      x.arc(px + d * s * 0.9, cy, s * 0.55, 0, TAU);
+    }
+  } else if (env.fruit === 'star') {
+    drawStar(x, px, py, s * 1.1, 5);
+  } else if (env.fruit === 'lantern') {
+    x.ellipse(px, py, s * 0.8, s * 1.1, 0, 0, TAU);
+  } else {
+    x.arc(px, py, s, 0, TAU);
+  }
+  x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.45)';
+  x.beginPath();
+  x.arc(px - s * 0.3, py - s * 0.3, s * 0.25, 0, TAU);
+  x.fill();
+}
+
+// Crystal facets for clusters with the crystalline gene.
+function drawCrystals(x, r, rng) {
+  for (let k = 0; k < 3; k++) {
+    const a = rng() * TAU;
+    const d = r * (0.6 + 0.3 * rng());
+    const s = r * 0.14;
+    const cx = Math.cos(a) * d;
+    const cy = Math.sin(a) * d;
+    x.beginPath();
+    x.moveTo(cx, cy - s);
+    x.lineTo(cx + s * 0.6, cy);
+    x.lineTo(cx, cy + s);
+    x.lineTo(cx - s * 0.6, cy);
+    x.closePath();
+    x.fillStyle = 'rgba(206,246,255,0.8)';
+    x.fill();
+    x.strokeStyle = 'rgba(255,255,255,0.9)';
+    x.lineWidth = s * 0.12;
+    x.stroke();
+  }
+}
+
+// One cluster sprite: leaves, flowers, fruit, and crystal facets, drawn in cluster units at res px per unit.
+function buildClusterSprite(c, env, res) {
+  const size = Math.max(8, Math.ceil(2 * c.radius * res * 1.15));
+  const cv = document.createElement('canvas');
+  cv.width = size;
+  cv.height = size;
+  const x = cv.getContext('2d');
+  x.setTransform(res, 0, 0, res, size / 2, size / 2);
+  const rng = rngFrom(c.seed);
+  for (const s of leafSpecs(c, env, rng)) drawLeaf(x, s, env);
+  const blossoms = env.blossom && rng() < 0.6 ? 1 : 0;
+  for (let f = 0; f < c.flowers + blossoms; f++) {
+    const fx = (rng() - 0.5) * c.radius * 0.9;
+    const fy = (rng() - 0.5) * c.radius * 0.9;
+    drawFlower(x, fx, fy, c.radius * 0.17 * env.flowerSize * (0.8 + 0.4 * rng()), env, rng);
+  }
+  for (let f = 0; f < c.fruit; f++) {
+    const [fx, fy] = fruitPos(env.fruitArrangement, f, c.fruit, c.radius, rng);
+    drawFruit(x, env, fx, fy, c.radius * 0.1 * env.fruitSize * (0.85 + 0.3 * rng()), rng);
+  }
+  if (c.crystal) drawCrystals(x, c.radius, rng);
+  return { cv, res, half: size / 2 };
+}
+
+// Sprites for every cluster of a layout, in cluster order. Thumbnails skip every other cluster.
+function buildSprites(layout, traits, res, thumb = false) {
+  const env = renderEnv(traits);
+  return layout.clusters.map((c, k) => (thumb && k % 2 ? null : buildClusterSprite(c, env, res)));
+}
+
+// Runtime cache: layout, traits, and sprites per plant. Holds the 8 most recently used plants.
+const RUNTIME = new Map();
+
+// Transient runtimes (thumbnails) are built without entering the cache.
+function runtimeFor(record, transient = false) {
+  const cached = transient ? undefined : RUNTIME.get(record.id);
+  if (cached) {
+    RUNTIME.delete(record.id);
+    RUNTIME.set(record.id, cached);
+    return cached;
+  }
+  const analysis = analyze(record.genes);
+  const traits = traitsOf(record.genes);
+  const layout = buildLayout(record.genes, analysis.seed);
+  const order = layout.clusters.map((_, k) => k)
+    .sort((a, b) => layout.nodes[layout.clusters[a].node].depth - layout.nodes[layout.clusters[b].node].depth);
+  const phases = Float64Array.from(layout.clusters, (c) => ((c.seed % 1000) / 1000) * TAU);
+  const rt = { id: record.id, analysis, traits, layout, order, phases, sprites: new Map() };
+  if (!transient) {
+    RUNTIME.set(record.id, rt);
+    if (RUNTIME.size > 8) RUNTIME.delete(RUNTIME.keys().next().value);
+  }
+  return rt;
+}
+
+// Sprites for one resolution bucket, cached per plant. Keeps the 3 most recent buckets.
+function spritesFor(rt, res, thumb = false) {
+  const key = thumb ? `t${res}` : res;
+  let entry = rt.sprites.get(key);
+  if (!entry) {
+    entry = { res, list: buildSprites(rt.layout, rt.traits, res, thumb) };
+    rt.sprites.set(key, entry);
+    if (rt.sprites.size > 3) rt.sprites.delete(rt.sprites.keys().next().value);
+  }
+  return entry;
+}
+
+// Bark glyphs, placed along a trunk or branch. (ux, uy) is along the node, (nx, ny) is its normal.
+function drawMark(x, kind, px, py, ux, uy, nx, ny, s) {
+  switch (kind) {
+    case 'furrow':
+      x.strokeStyle = 'rgba(28,17,9,0.38)';
+      x.lineWidth = s * 0.35;
+      x.beginPath();
+      x.moveTo(px - ux * s * 3, py - uy * s * 3);
+      x.lineTo(px + ux * s * 3, py + uy * s * 3);
+      x.stroke();
+      break;
+    case 'stripe':
+      x.strokeStyle = 'rgba(30,20,10,0.3)';
+      x.lineWidth = s * 0.8;
+      x.beginPath();
+      x.moveTo(px - ux * s * 6, py - uy * s * 6);
+      x.lineTo(px + ux * s * 6, py + uy * s * 6);
+      x.stroke();
+      break;
+    case 'paper':
+      x.strokeStyle = 'rgba(255,248,230,0.4)';
+      x.lineWidth = s * 0.5;
+      x.beginPath();
+      x.moveTo(px - nx * s * 2, py - ny * s * 2);
+      x.lineTo(px + nx * s * 2, py + ny * s * 2);
+      x.stroke();
+      break;
+    case 'scale':
+      x.strokeStyle = 'rgba(255,238,210,0.22)';
+      x.lineWidth = s * 0.4;
+      x.beginPath();
+      x.arc(px, py, s * 1.2, 0.2, Math.PI - 0.2);
+      x.stroke();
+      break;
+    case 'gnarl':
+      x.strokeStyle = 'rgba(24,14,8,0.35)';
+      x.lineWidth = s * 0.45;
+      x.beginPath();
+      x.arc(px, py, s * 1.1, 0, Math.PI * 1.5);
+      x.stroke();
+      break;
+    case 'spot':
+      x.fillStyle = 'rgba(40,24,14,0.36)';
+      x.beginPath();
+      x.ellipse(px, py, s * 1.3, s * 0.9, Math.atan2(uy, ux), 0, TAU);
+      x.fill();
+      break;
+    case 'rune':
+      x.strokeStyle = 'rgba(255,214,140,0.42)';
+      x.lineWidth = s * 0.45;
+      x.beginPath();
+      x.moveTo(px - ux * s - nx * s, py - uy * s - ny * s);
+      x.lineTo(px, py);
+      x.lineTo(px - ux * s + nx * s, py - uy * s + ny * s);
+      x.stroke();
+      break;
+    case 'eye':
+      x.strokeStyle = 'rgba(28,18,10,0.5)';
+      x.lineWidth = s * 0.45;
+      x.beginPath();
+      x.arc(px, py, s * 1.6, 0, TAU);
+      x.stroke();
+      x.fillStyle = 'rgba(20,12,6,0.55)';
+      x.beginPath();
+      x.arc(px, py, s * 0.6, 0, TAU);
+      x.fill();
+      break;
+    case 'marble':
+      x.strokeStyle = 'rgba(240,230,210,0.25)';
+      x.lineWidth = s * 0.4;
+      x.beginPath();
+      x.moveTo(px - ux * s * 3, py - uy * s * 3);
+      x.quadraticCurveTo(px + nx * s * 1.5, py + ny * s * 1.5, px + ux * s * 3, py + uy * s * 3);
+      x.stroke();
+      break;
+    case 'vein':
+      x.save();
+      x.globalCompositeOperation = 'lighter';
+      x.strokeStyle = 'rgba(140,255,225,0.4)';
+      x.lineWidth = s * 0.5;
+      x.beginPath();
+      x.moveTo(px - ux * s * 4, py - uy * s * 4);
+      x.lineTo(px + ux * s * 4, py + uy * s * 4);
+      x.stroke();
+      x.restore();
+      break;
+    case 'moss':
+      x.fillStyle = 'rgba(98,156,72,0.55)';
+      x.beginPath();
+      x.arc(px, py, s * 0.9, 0, TAU);
+      x.fill();
+      break;
+    case 'lichen':
+      x.fillStyle = 'rgba(196,216,160,0.5)';
+      x.beginPath();
+      x.arc(px, py, s * 1.5, 0, TAU);
+      x.fill();
+      break;
+    case 'velvetmoss':
+      x.fillStyle = 'rgba(72,134,64,0.42)';
+      x.beginPath();
+      x.arc(px, py, s * 2, 0, TAU);
+      x.fill();
+      break;
+    case 'glowmoss':
+      x.save();
+      x.globalCompositeOperation = 'lighter';
+      x.fillStyle = 'rgba(150,255,200,0.55)';
+      x.beginPath();
+      x.arc(px, py, s * 1.3, 0, TAU);
+      x.fill();
+      x.restore();
+      break;
+    default:
+      break;
+  }
+}
+
+const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// A canvas that shows one plant. Owns its fit, sprites, and particles. Animates only while started.
+class PlantView {
+  constructor(canvas, opts = {}) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.opts = Object.assign({ hybridColors: null }, opts);
+    this.motion = prefersReducedMotion() ? 0.4 : 1;
+    this.dpr = this.pixelRatio();
+    this.record = null;
+    this.rt = null;
+    this.buf = null;
+    this.grow = 1;
+    this.growDuration = 1.8;
+    this.particles = [];
+    this.W = opts.width || 300;
+    this.H = opts.height || 300;
+    this.U = 100;
+    this.bx = 0;
+    this.by = 0;
+    this.resize();
+  }
+
+  // Device-pixel ratio. Thumbnails pass dpr: 1. Other views use the window's ratio, capped at 2.
+  pixelRatio() {
+    return this.opts.dpr || Math.min(2, window.devicePixelRatio || 1);
+  }
+
+  // Match the canvas to its CSS box and refit the plant.
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.W = Math.max(1, Math.round(rect.width || this.W));
+    this.H = Math.max(1, Math.round(rect.height || this.H));
+    this.dpr = this.pixelRatio();
+    this.canvas.width = Math.round(this.W * this.dpr);
+    this.canvas.height = Math.round(this.H * this.dpr);
+    this.computeFit();
+  }
+
+  // U = min(W * 0.46 / halfWidth, H * 0.82 / height) in CSS px. The base sits at y = H * 0.92.
+  computeFit() {
+    if (!this.rt) return;
+    const b = this.rt.layout.bounds;
+    const halfW = Math.max(0.3, Math.abs(b.minX), Math.abs(b.maxX));
+    const height = Math.max(0.5, -b.top + this.rt.layout.hover);
+    this.U = Math.min((this.W * 0.46) / halfW, (this.H * 0.82) / height);
+    this.bx = this.W / 2 - ((b.minX + b.maxX) / 2) * this.U;
+    this.by = this.H * 0.92;
+  }
+
+  ensureSprites() {
+    if (!this.rt) return null;
+    const want = Math.max(24, this.U * this.dpr * SPRITE_SCALE);
+    return spritesFor(this.rt, Math.round(want / 8) * 8, !!this.opts.thumb);
+  }
+
+  setPlant(record, opts = {}) {
+    this.record = record;
+    this.opts = Object.assign(this.opts, opts);
+    this.rt = runtimeFor(record, !!this.opts.thumb);
+    this.grow = opts.animate === false ? 1 : 0;
+    this.growDuration = opts.growDuration || 1.8;
+    this.particles.length = 0;
+    this.computeFit();
+    this.ensureSprites();
+  }
+
+  buffers(n) {
+    if (!this.buf || this.buf.n !== n) {
+      this.buf = {
+        n,
+        SX: new Float64Array(n),
+        SY: new Float64Array(n),
+        EX: new Float64Array(n),
+        EY: new Float64Array(n),
+        WA: new Float64Array(n),
+        GP: new Float64Array(n),
+      };
+    }
+    return this.buf;
+  }
+
+  // Draw one frame at time t (seconds) with growth g in [0, 1]. Leaves the context at identity.
+  drawFrame(t, g) {
+    const ctx = this.ctx;
+    if (!ctx || !this.rt) return;
+    const L = this.rt.layout;
+    const N = L.nodes.length;
+    const dt = this.lastT === undefined ? 0 : Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    const { SX, SY, EX, EY, WA, GP } = this.buffers(N);
+    const U = this.U * this.dpr;
+    const baseX = this.bx * this.dpr;
+    const baseY = (this.by - L.hover * this.U) * this.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.drawBackdrop(ctx, t, baseX, baseY, U);
+
+    // Node pose: each node starts at its parent's current end, so sway accumulates up the tree.
+    for (let i = 0; i < N; i++) {
+      const nd = L.nodes[i];
+      const px = nd.parent < 0 ? nd.x : EX[nd.parent];
+      const py = nd.parent < 0 ? nd.y : EY[nd.parent];
+      const gp = growthOf(nd.birth, g);
+      const a = nd.angle + this.motion * nd.sway * Math.sin(t * nd.freq + nd.phase);
+      const len = nd.length * gp;
+      SX[i] = px;
+      SY[i] = py;
+      WA[i] = a;
+      GP[i] = gp;
+      EX[i] = px + Math.cos(a) * len;
+      EY[i] = py + Math.sin(a) * len;
+    }
+
+    ctx.globalAlpha = this.rt.traits.ethereal.v;
+
+    // Branches: tapered quads, with a highlight stroke on the thicker wood.
+    for (let i = 0; i < N; i++) {
+      if (GP[i] < 0.01) continue;
+      const nd = L.nodes[i];
+      const x0 = baseX + SX[i] * U;
+      const y0 = baseY + SY[i] * U;
+      const x1 = baseX + EX[i] * U;
+      const y1 = baseY + EY[i] * U;
+      const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+      const nx = -(y1 - y0) / len;
+      const ny = (x1 - x0) / len;
+      const h0 = Math.max(0.6, nd.w0 * U * 0.5);
+      const h1 = Math.max(0.4, nd.w1 * U * 0.5);
+      ctx.fillStyle = nd.color;
+      ctx.beginPath();
+      ctx.moveTo(x0 + nx * h0, y0 + ny * h0);
+      ctx.lineTo(x1 + nx * h1, y1 + ny * h1);
+      ctx.lineTo(x1 - nx * h1, y1 - ny * h1);
+      ctx.lineTo(x0 - nx * h0, y0 - ny * h0);
+      ctx.closePath();
+      ctx.fill();
+      if (h0 > 1.2) {
+        ctx.strokeStyle = 'rgba(255,238,205,0.14)';
+        ctx.lineWidth = h0 * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x0 + nx * h0 * 0.4, y0 + ny * h0 * 0.4);
+        ctx.lineTo(x1 + nx * h1 * 0.4, y1 + ny * h1 * 0.4);
+        ctx.stroke();
+      }
+    }
+
+    // Bark marks sit on their node, offset along its normal in proportion to its width.
+    for (const m of L.marks) {
+      const i = m.n;
+      if (GP[i] < 0.5) continue;
+      const nd = L.nodes[i];
+      const x0 = baseX + SX[i] * U;
+      const y0 = baseY + SY[i] * U;
+      const x1 = baseX + EX[i] * U;
+      const y1 = baseY + EY[i] * U;
+      const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+      const ux = (x1 - x0) / len;
+      const uy = (y1 - y0) / len;
+      const nx = -uy;
+      const ny = ux;
+      const hw = (nd.w0 + (nd.w1 - nd.w0) * m.t) * U * 0.5;
+      const cx = x0 + (x1 - x0) * m.t + nx * m.o * hw;
+      const cy = y0 + (y1 - y0) * m.t + ny * m.o * hw;
+      drawMark(ctx, m.kind, cx, cy, ux, uy, nx, ny, m.size * U * 0.012);
+    }
+
+    drawStructures(ctx, L, { SX, SY, EX, EY, GP }, this.rt.traits, U, baseX, baseY, t, this.motion);
+
+    // Cluster sprites: one drawImage each, with rustle and growth scale in the transform.
+    const sprites = this.ensureSprites();
+    if (sprites) {
+      const scale = U / sprites.res;
+      for (const k of this.rt.order) {
+        const c = L.clusters[k];
+        const spr = sprites.list[k];
+        if (!spr) continue;
+        const cg = easeOutBack(clamp01((g - c.birth) / 0.22));
+        if (cg < 0.01) continue;
+        const i = c.node;
+        const a = WA[i];
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        const ax = SX[i] + (EX[i] - SX[i]) * c.along;
+        const ay = SY[i] + (EY[i] - SY[i]) * c.along;
+        const px = ax + ca * c.offX - sa * c.offY;
+        const py = ay + sa * c.offX + ca * c.offY;
+        const ph = this.rt.phases[k];
+        const rot = a + c.angle + this.motion * (0.08 * Math.sin(t * 1.6 + ph) + 0.03 * Math.sin(t * 3.7 + ph * 1.7));
+        const f = scale * cg;
+        const cs = Math.cos(rot) * f;
+        const sn = Math.sin(rot) * f;
+        ctx.setTransform(cs, sn, -sn, cs, baseX + px * U, baseY + py * U);
+        ctx.drawImage(spr.cv, -spr.half, -spr.half);
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    this.drawGlints(ctx, { SX, SY, EX, EY, WA, GP }, g, t, U, baseX, baseY);
+    this.stepParticles(dt, L);
+    this.drawParticles(ctx, t, U, baseX, baseY);
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // Behind the plant: glow aura, hybrid aura, and a ground shadow with hovering roots for floating plants.
+  drawBackdrop(ctx, t, baseX, baseY, U) {
+    const traits = this.rt.traits;
+    const cx = baseX;
+    const cy = baseY - 0.5 * U;
+    if (traits.glowAura.v) drawAura(ctx, traits.glowAura.v, cx, cy, U, t);
+    if (this.opts.hybridColors) drawHybridAura(ctx, this.opts.hybridColors, cx, cy, U, t);
+    const hover = this.rt.layout.hover;
+    if (hover > 0) {
+      const ground = this.by * this.dpr;
+      ctx.fillStyle = `rgba(0,0,0,${Math.max(0.08, 0.3 - hover * 1.2)})`;
+      ctx.beginPath();
+      ctx.ellipse(baseX, ground, U * (0.22 - hover * 0.3), U * 0.04, 0, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(96,70,44,0.55)';
+      ctx.lineWidth = Math.max(1, U * 0.004);
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath();
+        ctx.moveTo(baseX + k * U * 0.02, baseY);
+        ctx.quadraticCurveTo(baseX + k * U * 0.05, (baseY + ground) / 2, baseX + k * U * 0.03, ground);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Particle pool. Spawns from the particle gene, capped at 60 (30 under reduced motion). Thumbnails have none.
+  stepParticles(dt, L) {
+    for (let k = this.particles.length - 1; k >= 0; k--) {
+      const p = this.particles[k];
+      p.age += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.vr !== undefined) p.rot += p.vr * dt;
+      if (p.age >= p.life) this.particles.splice(k, 1);
+    }
+    const kind = this.rt.traits.particleEffect.v;
+    if (!kind || this.opts.thumb || this.opts.particles === false) return;
+    const cap = this.motion < 1 ? 30 : 60;
+    const rate = { pollen: 5, petals: 3, spores: 3, fire: 2, stars: 2 }[kind] || 0;
+    this.spawnAcc = (this.spawnAcc || 0) + rate * dt * this.motion;
+    while (this.spawnAcc >= 1 && this.particles.length < cap) {
+      this.spawnAcc -= 1;
+      this.particles.push(spawnParticle(kind, L));
+    }
+    if (this.particles.length >= cap) this.spawnAcc = Math.min(this.spawnAcc, 1);
+  }
+
+  drawParticles(ctx, t, U, baseX, baseY) {
+    if (this.opts.particles === false) return;
+    if (this.rt.traits.particleEffect.v === 'rays' && !this.opts.thumb) drawRays(ctx, U, baseX, baseY, t);
+    if (!this.particles.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of this.particles) {
+      const life = clamp01(1 - p.age / p.life) * clamp01(p.age / 0.6);
+      const px = baseX + p.x * U;
+      const py = baseY + p.y * U;
+      ctx.globalAlpha = life;
+      if (p.kind === 'pollen') {
+        ctx.fillStyle = '#ffe27a';
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(1, U * 0.006), 0, TAU);
+        ctx.fill();
+      } else if (p.kind === 'petal') {
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = '#f6b8cc';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, U * 0.012, U * 0.006, 0, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      } else if (p.kind === 'spore') {
+        ctx.fillStyle = '#96ffbe';
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(1.5, U * 0.008), 0, TAU);
+        ctx.fill();
+      } else if (p.kind === 'fire') {
+        ctx.globalAlpha = life * (0.5 + 0.5 * Math.sin(t * 6 + p.ph));
+        ctx.fillStyle = '#e6ff8c';
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(1.2, U * 0.007), 0, TAU);
+        ctx.fill();
+      } else {
+        // Starlight motes and burst motes: a four-point glint.
+        const s = Math.max(2, U * 0.015) * (0.6 + 0.4 * Math.sin(t * 5 + (p.ph || 0)));
+        ctx.strokeStyle = p.color || '#fff6d6';
+        ctx.lineWidth = Math.max(1, U * 0.003);
+        ctx.beginPath();
+        ctx.moveTo(px - s, py);
+        ctx.lineTo(px + s, py);
+        ctx.moveTo(px, py - s);
+        ctx.lineTo(px, py + s);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // Glints on crystal clusters, twinkling at their own phase.
+  drawGlints(ctx, geo, g, t, U, baseX, baseY) {
+    if (this.rt.traits.crystalline.v === 0) return;
+    const L = this.rt.layout;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = '#e6fcff';
+    for (let k = 0; k < L.clusters.length; k++) {
+      const c = L.clusters[k];
+      if (!c.crystal || g < c.birth + 0.2) continue;
+      const i = c.node;
+      const a = geo.WA[i];
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const px = geo.SX[i] + (geo.EX[i] - geo.SX[i]) * c.along + ca * c.offX - sa * c.offY;
+      const py = geo.SY[i] + (geo.EY[i] - geo.SY[i]) * c.along + sa * c.offX + ca * c.offY;
+      const alpha = Math.max(0, Math.sin(t * 3.2 + this.rt.phases[k]));
+      if (alpha < 0.05) continue;
+      const s = U * 0.018 * (0.6 + 0.4 * alpha);
+      const x = baseX + px * U;
+      const y = baseY + py * U;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = Math.max(1, U * 0.002);
+      ctx.beginPath();
+      ctx.moveTo(x - s, y);
+      ctx.lineTo(x + s, y);
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x, y + s);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Empties the canvas and drops the plant (used when there is nothing to show).
+  clear() {
+    this.rt = null;
+    this.record = null;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  // Called by the Loop. Advances growth, then draws.
+  update(t, dt) {
+    if (this.grow < 1) this.grow = Math.min(1, this.grow + dt / this.growDuration);
+    this.drawFrame(t, this.grow);
+  }
+
+  // Star motes that burst from the plant. Drawn by the effects layer.
+  burst(color = '#ffe9a8') {
+    const room = (this.motion < 1 ? 30 : 60) - this.particles.length;
+    for (let k = 0; k < Math.min(12, room); k++) {
+      const a = (TAU * k) / 12 + Math.random() * 0.4;
+      const s = 0.12 + Math.random() * 0.18;
+      this.particles.push({ kind: 'star', x: 0, y: -0.5, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 0.05, age: 0, life: 1.4, color });
+    }
+  }
+
+  start() {
+    Loop.add(this);
+  }
+
+  stop() {
+    Loop.remove(this);
+  }
+}
+
+EG.PlantView = PlantView;
+EG.runtimeFor = runtimeFor;
+EG.buildSprites = buildSprites;
+
+// Aura behind the plant, in the glow gene's color. It breathes slowly.
+function drawAura(ctx, color, cx, cy, U, t) {
+  const rad = U * 0.75;
+  const rgb = hexToRgb(color);
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+  g.addColorStop(0, rgbStr(rgb, 0.22 + 0.06 * Math.sin(t * 1.3)));
+  g.addColorStop(1, rgbStr(rgb, 0));
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+}
+
+// Hybrid aura: two overlapping halos in the parents' colors, with motes that orbit the plant.
+function drawHybridAura(ctx, colors, cx, cy, U, t) {
+  const rad = U * 0.62;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 2; k++) {
+    const a = t * 0.25 + k * Math.PI;
+    const x = cx + Math.cos(a) * U * 0.12;
+    const y = cy + Math.sin(a) * U * 0.12;
+    const rgb = hexToRgb(colors[k]);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, rgbStr(rgb, 0.16));
+    g.addColorStop(1, rgbStr(rgb, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  for (let m = 0; m < 10; m++) {
+    const a = t * 0.6 + (TAU * m) / 10;
+    const r = U * (0.35 + 0.12 * Math.sin(t * 0.9 + m));
+    ctx.fillStyle = rgbStr(hexToRgb(colors[m % 2]), 0.55);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, Math.max(1, U * 0.006), 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Light rays: three translucent wedges falling from above the plant, drifting slowly.
+function drawRays(ctx, U, baseX, baseY, t) {
+  const sx = baseX - U * 0.9;
+  const sy = baseY - U * 2.2;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 3; k++) {
+    const tx = baseX + (k - 1) * U * 0.35 + Math.sin(t * 0.15 + k * 1.9) * U * 0.08;
+    const ty = baseY - U * 0.9;
+    const g = ctx.createLinearGradient(sx, sy, tx, ty);
+    g.addColorStop(0, 'rgba(255,240,190,0.1)');
+    g.addColorStop(1, 'rgba(255,240,190,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(tx - U * 0.12, ty);
+    ctx.lineTo(tx + U * 0.12, ty);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Point at fraction t along node i, in device px, with the node's unit direction and normal.
+function nodePoint(geo, i, t, U, baseX, baseY) {
+  const x0 = baseX + geo.SX[i] * U;
+  const y0 = baseY + geo.SY[i] * U;
+  const x1 = baseX + geo.EX[i] * U;
+  const y1 = baseY + geo.EY[i] * U;
+  const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+  const ux = (x1 - x0) / len;
+  const uy = (y1 - y0) / len;
+  return { x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t, ux, uy, nx: -uy, ny: ux };
+}
+
+// Roots, vines, mushrooms, thorns, and crystal veins, drawn from node poses. They sit behind the foliage.
+function drawStructures(ctx, L, geo, traits, U, baseX, baseY, t, motion) {
+  const trunk = L.nodes[L.trunkChain[0]];
+  const hw = Math.max(1, trunk.w0 * U * 0.5);
+  ctx.fillStyle = 'rgba(86,58,34,0.92)';
+  for (const b of L.buttress) {
+    ctx.beginPath();
+    ctx.moveTo(baseX - b.side * hw * 0.2, baseY - hw * 0.3);
+    ctx.lineTo(baseX + b.side * (hw + b.length * U), baseY + U * 0.004);
+    ctx.lineTo(baseX + b.side * hw * 0.5, baseY + U * 0.004);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = 'rgba(92,66,40,0.85)';
+  ctx.lineWidth = Math.max(1, U * 0.006);
+  for (const r of L.aerial) {
+    if (geo.GP[r.n] < 0.5) continue;
+    const p = nodePoint(geo, r.n, r.t, U, baseX, baseY);
+    const ex = p.x + (r.bend + motion * 0.02 * Math.sin(t * 1.1 + r.phase)) * U;
+    const ey = p.y + r.len * U;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.quadraticCurveTo(p.x + r.bend * U * 0.5, p.y + r.len * U * 0.55, ex, ey);
+    ctx.stroke();
+  }
+
+  if (L.vine && geo.GP[L.trunkChain[L.trunkChain.length - 1]] > 0.5) {
+    const chain = L.vine.chain;
+    ctx.lineWidth = Math.max(1, U * 0.007);
+    for (let s = 0; s < L.vine.strands; s++) {
+      ctx.strokeStyle = 'rgba(98,160,82,0.85)';
+      ctx.beginPath();
+      for (let k = 0; k <= 32; k++) {
+        const f = k / 32;
+        const pos = f * (chain.length - 1e-6);
+        const idx = Math.floor(pos);
+        const node = chain[idx];
+        const p = nodePoint(geo, node, pos - idx, U, baseX, baseY);
+        const off = Math.sin(f * TAU * 2.2 + L.vine.phase + s * 2.1 + t * 0.4 * motion) * L.nodes[node].w0 * U * 0.7 * (s % 2 ? -1 : 1);
+        const x = p.x + p.nx * off;
+        const y = p.y + p.ny * off;
+        if (k === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  for (const m of L.mushrooms) {
+    if (geo.GP[m.n] < 0.5) continue;
+    const p = nodePoint(geo, m.n, m.t, U, baseX, baseY);
+    const hw = L.nodes[m.n].w0 * U * 0.5;
+    const cx = p.x + p.nx * m.side * hw * 1.2;
+    const cy = p.y + p.ny * m.side * hw * 1.2;
+    const r = Math.max(2, m.size * U * 0.012);
+    ctx.fillStyle = 'rgba(240,230,205,0.95)';
+    ctx.fillRect(cx - r * 0.2, cy, r * 0.4, r * 0.9);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(214,126,90,0.9)';
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.4, cy - r * 0.4, r * 0.18, 0, TAU);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = 'rgba(56,38,24,0.9)';
+  for (const th of L.thorns) {
+    if (geo.GP[th.n] < 0.5) continue;
+    const nd = L.nodes[th.n];
+    const p = nodePoint(geo, th.n, th.t, U, baseX, baseY);
+    const hw = (nd.w0 + (nd.w1 - nd.w0) * th.t) * U * 0.5;
+    const bx = p.x + p.nx * th.side * hw;
+    const by = p.y + p.ny * th.side * hw;
+    const s = th.size * U * 0.018;
+    ctx.beginPath();
+    ctx.moveTo(bx - p.ux * s * 0.6, by - p.uy * s * 0.6);
+    ctx.lineTo(bx + p.nx * th.side * s + p.ux * s * 0.3, by + p.ny * th.side * s + p.uy * s * 0.3);
+    ctx.lineTo(bx + p.ux * s * 0.6, by + p.uy * s * 0.6);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (traits.crystalline.v >= 2) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = traits.crystalline.v === 3 ? 'rgba(170,240,255,0.5)' : 'rgba(170,240,255,0.28)';
+    ctx.lineWidth = Math.max(1, U * 0.005);
+    for (const i of L.trunkChain) {
+      if (geo.GP[i] < 0.5) continue;
+      const off = L.nodes[i].w0 * U * 0.2;
+      const p0 = nodePoint(geo, i, 0, U, baseX, baseY);
+      const p1 = nodePoint(geo, i, 1, U, baseX, baseY);
+      ctx.beginPath();
+      ctx.moveTo(p0.x + p0.nx * off, p0.y + p0.ny * off);
+      ctx.lineTo(p1.x + p1.nx * off, p1.y + p1.ny * off);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// A new particle, in the canopy (or near the base for spores). Positions are in world units.
+function spawnParticle(kind, L) {
+  const b = L.bounds;
+  const x = (b.minX + b.maxX) / 2 + (Math.random() - 0.5) * (b.maxX - b.minX);
+  const y = b.top + Math.random() * -b.top * 0.85;
+  switch (kind) {
+    case 'pollen':
+      return { kind: 'pollen', x, y, vx: 0, vy: -0.02, age: 0, life: 4 + 3 * Math.random() };
+    case 'petals':
+      return { kind: 'petal', x, y: b.top * 0.8, vx: 0.02, vy: 0.05, age: 0, life: 6, rot: Math.random() * TAU, vr: 1 + Math.random() };
+    case 'spores':
+      return { kind: 'spore', x: (Math.random() - 0.5) * 0.2, y: -0.05, vx: 0, vy: -0.03, age: 0, life: 5 };
+    case 'fire':
+      return { kind: 'fire', x, y, vx: (Math.random() - 0.5) * 0.03, vy: (Math.random() - 0.5) * 0.03, age: 0, life: 6, ph: Math.random() * TAU };
+    default:
+      return { kind: 'twinkle', x, y, vx: 0, vy: 0, age: 0, life: 2.5, ph: Math.random() * TAU };
+  }
+}
+
+// Thumbnails: static 220 px plants as WebP data URLs (PNG where WebP is unavailable). Keeps the 150 most recent.
+const THUMB_CACHE = new Map();
+const THUMB_LIMIT = 150;
+
+function renderThumb(record) {
+  const hit = THUMB_CACHE.get(record.id);
+  if (hit) {
+    THUMB_CACHE.delete(record.id);
+    THUMB_CACHE.set(record.id, hit);
+    return hit;
+  }
+  const canvas = document.createElement('canvas');
+  const view = new PlantView(canvas, { width: 220, height: 220, dpr: 1, thumb: true });
+  view.motion = 0;
+  view.setPlant(record, { animate: false });
+  view.drawFrame(0, 1);
+  const url = canvas.toDataURL('image/webp', 0.9);
+  THUMB_CACHE.set(record.id, url);
+  if (THUMB_CACHE.size > THUMB_LIMIT) THUMB_CACHE.delete(THUMB_CACHE.keys().next().value);
+  return url;
+}
+
+EG.renderThumb = renderThumb;
+EG.thumbCache = THUMB_CACHE;
+
+
+/* ===== Loop ===== */
+/* ---------- Loop: one requestAnimationFrame loop for every active viewer ---------- */
+const Loop = (() => {
+  const viewers = new Set();
+  let running = false;
+  let rafId = 0;
+  let last = 0;
+  let clock = 0;
+
+  function frame(now) {
+    if (!running) return;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    clock += dt;
+    for (const viewer of viewers) viewer.update(clock, dt);
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function stop() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+
+  // Starts the loop only when there is a viewer and the page is visible.
+  function ensure() {
+    if (running || document.hidden || viewers.size === 0) return;
+    running = true;
+    last = performance.now();
+    rafId = requestAnimationFrame(frame);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else ensure();
+  });
+
+  return {
+    add(viewer) {
+      viewers.add(viewer);
+      ensure();
+    },
+    remove(viewer) {
+      viewers.delete(viewer);
+      if (viewers.size === 0) stop();
+    },
+    get time() {
+      return clock;
+    },
+  };
+})();
+
+EG.Loop = Loop;
+
+
+/* ===== Store ===== */
+/* ---------- Store: localStorage with validation and a memory fallback (spec section 10) ---------- */
+const STORE_KEY = 'endless-garden:v1';
+const STORE_VERSION = 1;
+const SAVE_FAILED_TEXT = 'Saving is unavailable. Your garden lasts for this session.';
+let toastTimer = 0;
+
+// Show a short message at the bottom of the screen. It hides after 3.2 seconds.
+function showToast(message) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 3200);
+}
+
+// Usable: a string id and name, a genus with string parts, and 45 allele indices, each in its gene's range.
+function isUsableRecord(r) {
+  if (!r || typeof r !== 'object') return false;
+  if (typeof r.id !== 'string' || r.id === '' || typeof r.name !== 'string') return false;
+  if (!r.genus || typeof r.genus.pre !== 'string' || typeof r.genus.suf !== 'string') return false;
+  if (!Array.isArray(r.genes) || r.genes.length !== GENE_COUNT) return false;
+  return r.genes.every((v, i) => Number.isInteger(v) && v >= 0 && v < GENES[i].alleles.length);
+}
+
+// Fill optional fields with defaults, so later code can rely on them.
+function normalizeRecord(r) {
+  return {
+    id: r.id,
+    name: r.name.trim().slice(0, 40) || 'Unnamed specimen',
+    genus: { pre: r.genus.pre, suf: r.genus.suf },
+    genes: r.genes.slice(),
+    createdAt: Number.isFinite(r.createdAt) ? r.createdAt : 0,
+    fav: r.fav === true,
+    gen: Number.isInteger(r.gen) && r.gen >= 0 ? r.gen : 0,
+    parents: Array.isArray(r.parents) && r.parents.length === 2 ? r.parents : null,
+    origin: Array.isArray(r.origin) && r.origin.length === GENE_COUNT ? r.origin : null,
+    mutations: Array.isArray(r.mutations) ? r.mutations : null,
+    mutationChance: typeof r.mutationChance === 'number' ? r.mutationChance : null,
+  };
+}
+
+const Store = {
+  plants: [], // newest first
+  settings: { haptics: true, particles: true },
+  memoryOnly: false,
+
+  load() {
+    let raw = null;
+    try {
+      raw = localStorage.getItem(STORE_KEY);
+    } catch (err) {
+      this.memoryOnly = true;
+      showToast(SAVE_FAILED_TEXT);
+      return;
+    }
+    if (!raw) return;
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch (err) {
+      showToast('Saved data could not be read, so the garden starts fresh.');
+      return;
+    }
+    if (!data || typeof data !== 'object') {
+      showToast('Saved data could not be read, so the garden starts fresh.');
+      return;
+    }
+    if (data.settings && typeof data.settings === 'object') {
+      this.settings.haptics = data.settings.haptics !== false;
+      this.settings.particles = data.settings.particles !== false;
+    }
+    const seen = new Set();
+    let dropped = 0;
+    for (const r of Array.isArray(data.plants) ? data.plants : []) {
+      if (isUsableRecord(r) && !seen.has(r.id)) {
+        seen.add(r.id);
+        this.plants.push(normalizeRecord(r));
+      } else {
+        dropped++;
+      }
+    }
+    if (dropped) showToast(`Skipped ${dropped} unreadable specimen${dropped === 1 ? '' : 's'}.`);
+  },
+
+  // Writes everything. On failure, the session continues from memory and the player is told once.
+  save() {
+    const payload = JSON.stringify({ version: STORE_VERSION, plants: this.plants, settings: this.settings });
+    try {
+      localStorage.setItem(STORE_KEY, payload);
+      this.memoryOnly = false;
+    } catch (err) {
+      if (!this.memoryOnly) showToast(SAVE_FAILED_TEXT);
+      this.memoryOnly = true;
+    }
+  },
+
+  all() {
+    return this.plants.slice();
+  },
+
+  get(id) {
+    return this.plants.find((p) => p.id === id) || null;
+  },
+
+  // Adding a record that is already stored changes nothing. That keeps double taps from duplicating a plant.
+  add(record) {
+    const existing = this.get(record.id);
+    if (existing) return existing;
+    this.plants.unshift(record);
+    this.save();
+    return record;
+  },
+
+  update(id, patch) {
+    const record = this.get(id);
+    if (!record) return null;
+    if (typeof patch.name === 'string') record.name = patch.name;
+    if (typeof patch.fav === 'boolean') record.fav = patch.fav;
+    this.save();
+    return record;
+  },
+
+  remove(id) {
+    const i = this.plants.findIndex((p) => p.id === id);
+    if (i < 0) return false;
+    this.plants.splice(i, 1);
+    this.save();
+    return true;
+  },
+
+  // Removes every specimen. Settings stay.
+  reset() {
+    this.plants = [];
+    this.save();
+  },
+};
+
+Store.load();
+EG.Store = Store;
+EG.showToast = showToast;
+
+
+/* ===== UI ===== */
+/* ---------- UI: navigation, home, generate flow, lab, and reveal ---------- */
+const $ = (id) => document.getElementById(id);
+const screenEls = { home: $('screen-home'), gallery: $('screen-gallery'), detail: $('screen-detail') };
+const TIER_IDS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+let homeView = null;
+let revealView = null;
+let reveal = null; // the specimen on screen: { record, saved }
+let busy = false;
+
+// Draw one screen. It never touches history: navigate() and route() own the URL. The home preview animates only while home is showing.
+function go(name, id = null) {
+  for (const [key, el] of Object.entries(screenEls)) el.classList.toggle('active', key === name);
+  if (name === 'home') {
+    renderHome();
+    homeView.resize();
+    homeView.start();
+  } else {
+    homeView.stop();
+  }
+  if (name === 'gallery') renderGallery();
+  if (name === 'detail') {
+    renderDetail(id);
+  } else {
+    detailView.stop();
+  }
+}
+
+// A parent's aura color: its flower's light shade, or the light shade of its leaves when the flower is rainbow.
+function auraColor(record) {
+  const T = traitsOf(record.genes);
+  const flower = T.flowerColor.v;
+  return Array.isArray(flower) ? flower[1] : T.leafPalette.v[1];
+}
+
+// Hybrids glow in both parents' colors. Pure plants pass null, so an earlier hybrid aura cannot linger on a PlantView.
+function auraOptions(record) {
+  return { hybridColors: record.parents ? record.parents.map(auraColor) : null };
+}
+
+function renderHome() {
+  const plants = Store.all();
+  $('galleryCount').textContent = String(plants.length);
+  if (!plants.length) {
+    homeView.clear();
+    $('specimenCaption').textContent = 'Your first specimen waits in the soil.';
+    return;
+  }
+  const latest = plants[0];
+  homeView.setPlant(latest, { animate: false, ...auraOptions(latest) });
+  $('specimenCaption').textContent = `${latest.name} · ${analyze(latest.genes).tier.label}`;
+}
+
+// Vibrate briefly when haptics are on. Devices without vibration are skipped silently.
+function buzz(pattern) {
+  if (!Store.settings.haptics || !navigator.vibrate) return;
+  try {
+    navigator.vibrate(pattern);
+  } catch (err) {
+    // Vibration is not allowed in this context.
+  }
+}
+
+function randomSeed() {
+  if (window.crypto && crypto.getRandomValues) {
+    const a = new Uint32Array(1);
+    crypto.getRandomValues(a);
+    return a[0];
+  }
+  return Math.floor(Math.random() * 4294967296);
+}
+
+// A new specimen, not stored yet. Its name follows from the genome seed.
+function newPlant(seed = randomSeed()) {
+  const genes = sampleGenome(rngFrom(seed));
+  const named = pureName(analyze(genes));
+  return {
+    id: newId(), name: named.name, genus: named.genus, genes,
+    createdAt: Date.now(), fav: false, gen: 0, parents: null, origin: null, mutations: null, mutationChance: null,
+  };
+}
+
+// Lab drawings. A sprout grows for a generation, and a DNA ladder lights up for a hybridization. p is progress.
+function drawLab(ctx, kind, p, w, h, dpr) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2;
+  if (kind === 'hybridize') {
+    const top = h * 0.06;
+    const bottom = h * 0.94;
+    const amp = w * 0.2;
+    const now = performance.now() / 600;
+    for (let k = 0; k < GENE_COUNT; k++) {
+      const f = k / (GENE_COUNT - 1);
+      const y = top + (bottom - top) * f;
+      const ph = f * Math.PI * 4 + now;
+      const xa = cx + Math.sin(ph) * amp;
+      const xb = cx - Math.sin(ph) * amp;
+      const lit = (k + 1) / GENE_COUNT <= p;
+      ctx.strokeStyle = lit ? 'rgba(233, 201, 119, 0.9)' : 'rgba(233, 201, 119, 0.16)';
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(xa, y);
+      ctx.lineTo(xb, y);
+      ctx.stroke();
+      ctx.fillStyle = lit ? '#7fd3b5' : 'rgba(127, 211, 181, 0.28)';
+      ctx.beginPath();
+      ctx.arc(xa, y, 3.2 * dpr, 0, TAU);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(xb, y, 3.2 * dpr, 0, TAU);
+      ctx.fill();
+    }
+    return;
+  }
+  const baseY = h * 0.84;
+  const grow = Math.min(1, p * 1.2);
+  const stem = grow * h * 0.56;
+  const glow = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, w * 0.45);
+  glow.addColorStop(0, `rgba(233, 201, 119, ${0.25 * (1 - grow)})`);
+  glow.addColorStop(1, 'rgba(233, 201, 119, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(92, 64, 38, 0.7)';
+  ctx.beginPath();
+  ctx.ellipse(cx, baseY + 4 * dpr, w * 0.2, 9 * dpr, 0, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = '#86e09a';
+  ctx.lineWidth = 3 * dpr;
+  ctx.beginPath();
+  ctx.moveTo(cx, baseY);
+  ctx.quadraticCurveTo(cx + 8 * dpr, baseY - stem * 0.5, cx, baseY - stem);
+  ctx.stroke();
+  const leaves = grow > 0.4 ? Math.min(1, (grow - 0.4) / 0.6) : 0;
+  for (const side of [-1, 1]) {
+    const ly = baseY - stem * (side < 0 ? 0.55 : 0.75);
+    ctx.fillStyle = 'rgba(134, 224, 154, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(cx + side * 22 * dpr * leaves, ly, 22 * dpr * leaves, 9 * dpr * leaves, side * -0.5, 0, TAU);
+    ctx.fill();
+  }
+}
+
+// Progress overlay for a generation or a hybridization. Resolves when the animation ends, or after a tap past 0.3 s.
+// For hybridization, opts.parents holds the two parent records and their thumbnails slide toward the center.
+function openLab(kind, opts = {}) {
+  const hybrid = kind === 'hybridize';
+  const duration = hybrid ? 1.4 : 0.9;
+  const overlay = $('overlay-lab');
+  const canvas = $('labCanvas');
+  const parentA = $('labParentA');
+  const parentB = $('labParentB');
+  const dual = hybrid && Array.isArray(opts.parents) && opts.parents.length === 2;
+  $('labKicker').textContent = hybrid ? 'Splicing' : 'Germinating';
+  $('labTitle').textContent = dual ? `${opts.parents[0].name} × ${opts.parents[1].name}` : 'Sampling a new genome';
+  parentA.hidden = !dual;
+  parentB.hidden = !dual;
+  if (dual) {
+    parentA.src = renderThumb(opts.parents[0]);
+    parentB.src = renderThumb(opts.parents[1]);
+  }
+  overlay.hidden = false;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.round(Math.max(1, rect.width || 260) * dpr);
+  canvas.height = Math.round(Math.max(1, rect.height || 240) * dpr);
+  const ctx = canvas.getContext('2d');
+  const start = performance.now();
+  return new Promise((resolve) => {
+    let finished = false;
+    let backstop = 0;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(backstop);
+      Loop.remove(viewer);
+      overlay.removeEventListener('pointerdown', skip);
+      overlay.hidden = true;
+      resolve();
+    };
+    const skip = () => {
+      if (performance.now() - start >= 300) finish();
+    };
+    const viewer = {
+      update() {
+        const p = Math.min(1, (performance.now() - start) / 1000 / duration);
+        drawLab(ctx, hybrid ? 'hybridize' : 'generate', p, canvas.width, canvas.height, dpr);
+        $('labBar').style.width = `${Math.round(p * 100)}%`;
+        const genes = Math.min(GENE_COUNT, Math.round(p * GENE_COUNT));
+        $('labCount').textContent = `${hybrid ? 'Splicing' : 'Sampling'} genes ${genes} / ${GENE_COUNT}`;
+        if (dual) {
+          const shift = (1 - p) * 42;
+          parentA.style.transform = `translateX(${shift}px)`;
+          parentB.style.transform = `translateX(${-shift}px)`;
+        }
+        if (p >= 1) finish();
+      },
+    };
+    overlay.addEventListener('pointerdown', skip);
+    Loop.add(viewer);
+    // Frames can arrive late on slow devices. This timer ends the lab on time regardless.
+    backstop = setTimeout(finish, duration * 1000 + 40);
+  });
+}
+
+// Rarity band for a trait's probability p. It picks the trait's color.
+function rarityClass(p) {
+  if (p <= 0.01) return 'legendary';
+  if (p <= 0.03) return 'epic';
+  if (p <= 0.06) return 'rare';
+  if (p < 0.12) return 'uncommon';
+  return 'common';
+}
+
+function formatPct(v) {
+  return `${v < 10 ? Number(v.toFixed(1)) : Math.round(v)}%`;
+}
+
+function renderTraits(record, notable) {
+  const list = $('rvTraits');
+  list.textContent = '';
+  notable.forEach((item, i) => {
+    const li = traitRow(record, item);
+    li.style.animationDelay = `${0.35 + i * 0.07}s`;
+    list.append(li);
+  });
+}
+
+function setSaveButton(saved) {
+  const btn = $('rvSave');
+  btn.disabled = saved;
+  btn.textContent = saved ? 'Saved' : 'Save to Gallery';
+}
+
+// Shows a specimen full screen with its growth animation, tier, rarity meter, and notable traits.
+// A hybrid also shows its parents, the mutation callout, and Breed Again, which breeds the same two parents again.
+function openReveal(record, opts = {}) {
+  const analysis = analyze(record.genes);
+  reveal = { record, saved: Boolean(Store.get(record.id)), parents: opts.parents || null };
+  const hybrid = Boolean(opts.hybrid || record.parents);
+  $('rvKicker').textContent = hybrid ? `Hybrid specimen · Gen ${record.gen}` : 'New specimen';
+  $('rvName').textContent = record.name;
+  $('rvHybrid').hidden = !hybrid;
+  $('rvAgain').textContent = hybrid ? 'Breed Again' : 'Generate Another';
+  paintLineage(record, { line: $('rvLineage'), parents: $('rvParents'), mutation: $('rvMutation') });
+  const chip = $('rvTier');
+  chip.textContent = analysis.tier.label;
+  chip.className = `tier-chip tier-${analysis.tier.id}`;
+  $('rvScore').textContent = `Rarity ${analysis.score.toFixed(1)} / 100`;
+  $('rvPctl').textContent = `Rarer than ${analysis.score.toFixed(1)}% of plants`;
+  const meter = $('rvMeter');
+  meter.style.width = '0%';
+  requestAnimationFrame(() => {
+    meter.style.width = `${analysis.score.toFixed(1)}%`;
+  });
+  renderTraits(record, analysis.notable.slice(0, 8));
+  setSaveButton(reveal.saved);
+  $('overlay-reveal').hidden = false;
+  revealView.resize();
+  revealView.setPlant(record, { animate: true, growDuration: 1.8, ...auraOptions(record) });
+  revealView.start();
+  if (TIER_IDS.indexOf(analysis.tier.id) >= TIER_IDS.indexOf('legendary')) revealView.burst();
+  $('rvSave').focus({ preventScroll: true });
+  buzz(TIER_IDS.indexOf(analysis.tier.id) >= 3 ? [20, 40, 20] : [10]);
+}
+
+function closeReveal() {
+  if (!reveal) return;
+  if (!reveal.saved) showToast('Unsaved specimens fade away.');
+  revealView.stop();
+  $('overlay-reveal').hidden = true;
+  reveal = null;
+}
+
+// Saving is idempotent: the button disables itself, and the store ignores a repeat. The screen behind the reveal redraws at once.
+function saveReveal() {
+  if (!reveal || reveal.saved) return;
+  Store.add(reveal.record);
+  reveal.saved = true;
+  setSaveButton(true);
+  refreshVisible();
+  buzz([8]);
+  showToast('Saved to your gallery');
+}
+
+// Redraws the list on screen after the garden changes, so home and the gallery never show a stale count.
+function refreshVisible() {
+  if (screenEls.home.classList.contains('active')) renderHome();
+  if (screenEls.gallery.classList.contains('active')) refreshGallery();
+}
+
+// Generate: a busy guard stops double taps from starting a second run.
+async function generateFlow() {
+  if (busy) return;
+  busy = true;
+  try {
+    buzz([12]);
+    const record = newPlant();
+    await openLab('generate');
+    openReveal(record);
+  } finally {
+    busy = false;
+  }
+}
+
+// Breeding runs the lab with both parents, then opens the hybrid reveal. The busy guard stops a second run from a double tap.
+async function breedFlow(parents) {
+  if (busy) return;
+  busy = true;
+  try {
+    buzz([12]);
+    const record = makeHybrid(parents[0], parents[1], rngFrom(randomSeed()));
+    await openLab('hybridize', { parents });
+    openReveal(record, { hybrid: true, parents });
+  } finally {
+    busy = false;
+  }
+}
+
+// Hybridize from the dock: the two selected parents, as long as both are still in the gallery.
+function hybridize() {
+  const parents = breedState.parents.map((id) => Store.get(id));
+  if (parents.length !== 2 || !parents.every(Boolean)) return Promise.resolve();
+  return breedFlow(parents);
+}
+
+/* ---------- Gallery: grid, search, filters, sorting, and card actions ---------- */
+const galleryState = { query: '', filter: 'all', sort: 'newest', pageSize: 48, shown: 48, breed: false };
+// Breed mode keeps up to two parent ids. Task 13 builds the selection and the dock on this.
+const breedState = { parents: [] };
+const analysisCache = new Map();
+const thumbQueue = [];
+let thumbFrame = 0;
+let longPressTimer = 0;
+let longPressFired = false;
+let cardObserver = null;
+let pageObserver = null;
+
+const FILTERS = [
+  ['all', 'All'],
+  ['fav', '★ Favorites'],
+  ['hybrid', 'Hybrids'],
+  ['pure', 'Pure'],
+  ...TIER_IDS.map((id) => [id, id[0].toUpperCase() + id.slice(1)]),
+];
+
+const SORTS = {
+  newest: (a, b) => b.createdAt - a.createdAt,
+  oldest: (a, b) => a.createdAt - b.createdAt,
+  rarest: (a, b) => analysisOf(b).score - analysisOf(a).score,
+  common: (a, b) => analysisOf(a).score - analysisOf(b).score,
+  name: (a, b) => a.name.localeCompare(b.name),
+  generation: (a, b) => b.gen - a.gen || b.createdAt - a.createdAt,
+};
+
+// Analysis depends only on the genes, so each record is analyzed once.
+function analysisOf(record) {
+  let analysis = analysisCache.get(record.id);
+  if (!analysis) {
+    analysis = analyze(record.genes);
+    analysisCache.set(record.id, analysis);
+  }
+  return analysis;
+}
+
+function isHybrid(record) {
+  return record.gen > 0 || Boolean(record.parents);
+}
+
+function matchesFilter(record, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'fav') return record.fav;
+  if (filter === 'hybrid') return isHybrid(record);
+  if (filter === 'pure') return !isHybrid(record);
+  return analysisOf(record).tier.id === filter;
+}
+
+function matchesQuery(record, q) {
+  if (record.name.toLowerCase().includes(q)) return true;
+  return analysisOf(record).notable.some((n) => n.allele.name.toLowerCase().includes(q));
+}
+
+// What the gallery shows: filtered, searched, and sorted. Store order is newest first.
+function visibleList() {
+  const q = galleryState.query.trim().toLowerCase();
+  return Store.all()
+    .filter((r) => matchesFilter(r, galleryState.filter) && (!q || matchesQuery(r, q)))
+    .sort(SORTS[galleryState.sort] || SORTS.newest);
+}
+
+function debounce(fn, ms) {
+  let timer = 0;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+function renderFilters() {
+  const box = $('gFilters');
+  box.textContent = '';
+  for (const [id, label] of FILTERS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', String(galleryState.filter === id));
+    b.addEventListener('click', () => {
+      galleryState.filter = id;
+      renderGallery();
+    });
+    box.append(b);
+  }
+}
+
+// Gallery screen from the first page: header counts, filter chips, then the grid.
+function renderGallery() {
+  galleryState.shown = galleryState.pageSize;
+  refreshGallery();
+}
+
+// Header and grid, keeping how many cards are loaded so far. A parent deleted elsewhere leaves the selection.
+function refreshGallery() {
+  const all = Store.all();
+  const hybrids = all.filter(isHybrid).length;
+  const favorites = all.filter((r) => r.fav).length;
+  $('gSub').textContent = `${plural(all.length, 'specimen')} · ${plural(hybrids, 'hybrid')} · ${plural(favorites, 'favorite')}`;
+  $('gSort').value = galleryState.sort;
+  $('gTitle').textContent = galleryState.breed ? 'Hybridize' : 'Gallery';
+  $('gBreed').textContent = galleryState.breed ? 'Done' : 'Breed';
+  $('gBreed').setAttribute('aria-pressed', String(galleryState.breed));
+  breedState.parents = breedState.parents.filter((id) => Store.get(id));
+  renderFilters();
+  paintGrid();
+  paintBreedDock();
+}
+
+// Rebuilds the loaded cards and keeps the scroll position.
+function paintGrid() {
+  const grid = $('gGrid');
+  const list = visibleList();
+  const top = grid.scrollTop;
+  cardObserver.disconnect();
+  pageObserver.disconnect();
+  grid.textContent = '';
+  for (const record of list.slice(0, galleryState.shown)) {
+    const card = cardFor(record);
+    grid.append(card);
+    cardObserver.observe(card);
+  }
+  if (list.length > galleryState.shown) {
+    const sentinel = document.createElement('div');
+    sentinel.className = 'grid-sentinel';
+    grid.append(sentinel);
+    pageObserver.observe(sentinel);
+  }
+  grid.scrollTop = top;
+  renderEmpty(list.length);
+  paintSelection();
+}
+
+function renderEmpty(count) {
+  const box = $('gEmpty');
+  box.textContent = '';
+  box.hidden = count > 0;
+  if (count > 0) return;
+  const text = document.createElement('p');
+  if (Store.all().length === 0) {
+    text.textContent = 'No specimens yet. Your gallery fills as you save plants.';
+    const button = makeButton('Generate a plant', 'btn-primary', 'gGenerate');
+    button.addEventListener('click', () => navigate('#/'));
+    box.append(text, button);
+  } else {
+    text.textContent = 'Nothing matches these filters.';
+    box.append(text);
+  }
+}
+
+function cardFor(record) {
+  const analysis = analysisOf(record);
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.id = record.id;
+  const thumb = document.createElement('div');
+  thumb.className = 'thumb';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.decoding = 'async';
+  thumb.append(img);
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  const name = document.createElement('p');
+  name.className = 'card-name';
+  name.textContent = record.name;
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
+  const chip = document.createElement('span');
+  chip.className = `tier-chip tier-${analysis.tier.id}`;
+  chip.textContent = analysis.tier.label;
+  meta.append(chip);
+  if (isHybrid(record)) {
+    const badge = document.createElement('span');
+    badge.className = 'badge hybrid';
+    badge.textContent = 'Hybrid';
+    meta.append(badge);
+  }
+  if (record.gen > 0) {
+    const gen = document.createElement('span');
+    gen.className = 'gen';
+    gen.textContent = `Gen ${record.gen}`;
+    meta.append(gen);
+  }
+  body.append(name, meta);
+  const fav = document.createElement('button');
+  fav.type = 'button';
+  fav.className = `fav${record.fav ? ' on' : ''}`;
+  fav.textContent = record.fav ? '★' : '☆';
+  fav.setAttribute('aria-label', record.fav ? `Remove ${record.name} from favorites` : `Add ${record.name} to favorites`);
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'more';
+  more.textContent = '⋯';
+  more.setAttribute('aria-label', `More actions for ${record.name}`);
+  card.append(thumb, body, fav, more);
+
+  fav.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFavorite(record.id);
+  });
+  more.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openActions(record.id);
+  });
+  card.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    longPressFired = false;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      longPressFired = true;
+      openActions(record.id);
+    }, 500);
+  });
+  const cancelPress = () => clearTimeout(longPressTimer);
+  card.addEventListener('pointerup', cancelPress);
+  card.addEventListener('pointerleave', cancelPress);
+  card.addEventListener('pointercancel', cancelPress);
+  card.addEventListener('click', (e) => {
+    if (longPressFired) {
+      longPressFired = false;
+      return;
+    }
+    if (e.target.closest('button')) return;
+    onCardTap(record.id);
+  });
+  return card;
+}
+
+// Thumbnails render lazily: a card asks once, when it first scrolls into view. Two per frame.
+function onCardsVisible(entries) {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    cardObserver.unobserve(entry.target);
+    const img = entry.target.querySelector('img');
+    const record = Store.get(entry.target.dataset.id);
+    if (img && record && !img.src) thumbQueue.push({ img, record });
+  }
+  scheduleThumbs();
+}
+
+function scheduleThumbs() {
+  if (thumbFrame) return;
+  thumbFrame = requestAnimationFrame(() => {
+    thumbFrame = 0;
+    for (let k = 0; k < 2 && thumbQueue.length; k++) {
+      const { img, record } = thumbQueue.shift();
+      img.src = renderThumb(record);
+    }
+    if (thumbQueue.length) scheduleThumbs();
+  });
+}
+
+// Infinite scroll: when the sentinel comes into view, the next page of cards is added.
+function onSentinel(entries) {
+  if (!entries.some((e) => e.isIntersecting)) return;
+  if (galleryState.shown >= visibleList().length) return;
+  galleryState.shown += galleryState.pageSize;
+  paintGrid();
+}
+
+function onCardTap(id) {
+  if (galleryState.breed) toggleParent(id);
+  else openDetail(id);
+}
+
+// Breed selection. Tapping a selected plant clears its slot. A third plant replaces the older of the two,
+// so one plant can never hold both slots.
+function toggleParent(id) {
+  const parents = breedState.parents;
+  const at = parents.indexOf(id);
+  if (at !== -1) {
+    parents.splice(at, 1);
+  } else {
+    if (parents.length === 2) parents.shift();
+    parents.push(id);
+  }
+  buzz([6]);
+  paintSelection();
+  paintBreedDock();
+}
+
+// Marks the loaded cards that are parents, A or B, without rebuilding the grid.
+function paintSelection() {
+  for (const card of $('gGrid').querySelectorAll('.card')) {
+    const slot = galleryState.breed ? breedState.parents.indexOf(card.dataset.id) : -1;
+    card.classList.toggle('selected', slot !== -1);
+    let mark = card.querySelector('.slot-mark');
+    if (slot === -1) {
+      if (mark) mark.remove();
+      continue;
+    }
+    if (!mark) {
+      mark = document.createElement('span');
+      mark.className = 'slot-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      card.append(mark);
+    }
+    mark.textContent = slot === 0 ? 'A ✓' : 'B ✓';
+  }
+}
+
+// The gallery header turns breed mode on and off without leaving the gallery.
+function toggleBreedMode() {
+  galleryState.breed = !galleryState.breed;
+  breedState.parents = [];
+  refreshGallery();
+}
+
+// The breed dock: both parents, the rarest traits they may pass on, the mutation note, and Hybridize, enabled at two.
+function paintBreedDock() {
+  const dock = $('breedDock');
+  dock.hidden = !galleryState.breed;
+  if (!galleryState.breed) return;
+  const parents = breedState.parents.map((id) => Store.get(id));
+  paintSlot($('slotA'), parents[0], 'A');
+  paintSlot($('slotB'), parents[1], 'B');
+  const chips = $('breedForecast');
+  const hint = $('breedHint');
+  chips.textContent = '';
+  if (parents.length < 2) {
+    hint.textContent = parents.length ? 'Choose one more parent to see what they may pass on.' : 'Choose two parents to see what they may pass on.';
+  } else {
+    const traits = forecast(parents[0].genes, parents[1].genes).slice(0, 6);
+    hint.textContent = traits.length ? 'Rare traits they may pass on' : 'None of their rare traits are likely to pass on.';
+    for (const { allele, chance } of traits) {
+      const chip = document.createElement('span');
+      chip.className = 'forecast-chip';
+      chip.textContent = `${allele.name} · ${Math.round(chance * 100)}%`;
+      chips.append(chip);
+    }
+  }
+  $('breedGo').disabled = parents.length !== 2;
+}
+
+function paintSlot(slot, parent, label) {
+  slot.textContent = '';
+  slot.classList.toggle('empty', !parent);
+  if (!parent) {
+    slot.textContent = `Choose parent ${label}`;
+    return;
+  }
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = renderThumb(parent);
+  const name = document.createElement('p');
+  name.className = 'slot-name';
+  name.textContent = `${label} · ${parent.name}`;
+  slot.append(img, name);
+}
+
+function toggleFavorite(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  Store.update(id, { fav: !record.fav });
+  buzz([6]);
+  refreshGallery();
+}
+
+function makeButton(label, className, id, type = 'button') {
+  const b = document.createElement('button');
+  b.type = type;
+  b.className = className;
+  b.id = id;
+  b.textContent = label;
+  return b;
+}
+
+// Bottom sheet with actions for one specimen. A tap disables the sheet, then runs the action after it closes.
+function closeSheet() {
+  const sheet = $('sheet');
+  sheet.hidden = true;
+  sheet.textContent = '';
+}
+
+function openSheet(record, actions) {
+  const sheet = $('sheet');
+  sheet.textContent = '';
+  const card = document.createElement('div');
+  card.className = 'sheet-card';
+  const title = document.createElement('p');
+  title.className = 'sheet-title';
+  title.textContent = record.name;
+  card.append(title);
+  const buttons = actions.map((action) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `sheet-action${action.danger ? ' danger' : ''}`;
+    b.dataset.action = action.id;
+    b.textContent = action.label;
+    b.addEventListener('click', () => {
+      if (buttons.some((x) => x.disabled)) return;
+      buttons.forEach((x) => {
+        x.disabled = true;
+      });
+      setTimeout(() => {
+        closeSheet();
+        action.run();
+      }, 120);
+    });
+    card.append(b);
+    return b;
+  });
+  sheet.append(card);
+  sheet.hidden = false;
+  if (buttons.length) buttons[0].focus();
+}
+
+function openActions(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  openSheet(record, [
+    { id: 'view', label: 'View', run: () => openDetail(id) },
+    { id: 'rename', label: 'Rename', run: () => renameSpecimen(id) },
+    { id: 'favorite', label: record.fav ? 'Remove from favorites' : 'Add to favorites', run: () => toggleFavorite(id) },
+    { id: 'delete', label: 'Delete', danger: true, run: () => deleteSpecimen(id) },
+  ]);
+}
+
+// Dialog host. The first answer wins: buttons disable at once, and the dialog hides after a short delay,
+// so a double tap cannot reach the page underneath.
+function openDialog(card, onAnswer) {
+  const box = $('dialog');
+  box.textContent = '';
+  box.append(card);
+  box.hidden = false;
+  let answered = false;
+  const onKey = (e) => {
+    if (e.key === 'Escape') answer(null);
+  };
+  const answer = (value) => {
+    if (answered) return;
+    answered = true;
+    card.querySelectorAll('button').forEach((b) => {
+      b.disabled = true;
+    });
+    setTimeout(() => {
+      box.hidden = true;
+      box.textContent = '';
+      box.removeEventListener('keydown', onKey);
+      onAnswer(value);
+    }, 200);
+  };
+  box.addEventListener('keydown', onKey);
+  return answer;
+}
+
+// Rename prompt. Resolves with the typed text, or null when cancelled.
+function promptText({ title, value = '', max = 40 }) {
+  return new Promise((resolve) => {
+    const heading = document.createElement('h3');
+    heading.id = 'dialog-title';
+    heading.textContent = title;
+    const input = document.createElement('input');
+    input.id = 'dlgInput';
+    input.type = 'text';
+    input.maxLength = max;
+    input.value = value;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-labelledby', 'dialog-title');
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancel = makeButton('Cancel', 'btn-secondary', 'dlgCancel');
+    const ok = makeButton('Save', 'btn-primary', 'dlgOk', 'submit');
+    actions.append(cancel, ok);
+    const form = document.createElement('form');
+    form.className = 'dialog-card';
+    form.append(heading, input, actions);
+    const answer = openDialog(form, (text) => resolve(text));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      answer(input.value);
+    });
+    cancel.addEventListener('click', () => answer(null));
+    input.focus();
+    input.select();
+  });
+}
+
+// Confirm prompt. Resolves true only when the confirm button is chosen.
+function confirmDialog({ title, message, confirmLabel = 'Confirm' }) {
+  return new Promise((resolve) => {
+    const heading = document.createElement('h3');
+    heading.id = 'dialog-title';
+    heading.textContent = title;
+    const text = document.createElement('p');
+    text.className = 'dialog-text';
+    text.textContent = message;
+    const cancel = makeButton('Cancel', 'btn-secondary', 'dlgCancel');
+    const ok = makeButton(confirmLabel, 'btn-danger', 'dlgOk');
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    actions.append(cancel, ok);
+    const card = document.createElement('div');
+    card.className = 'dialog-card';
+    card.append(heading, text, actions);
+    const answer = openDialog(card, (yes) => resolve(yes === true));
+    cancel.addEventListener('click', () => answer(false));
+    ok.addEventListener('click', () => answer(true));
+    cancel.focus();
+  });
+}
+
+async function renameSpecimen(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  const text = await promptText({ title: 'Rename specimen', value: record.name, max: 40 });
+  if (text === null) return;
+  const next = text.trim().slice(0, 40);
+  if (!next || !Store.get(id)) return; // an empty name keeps the old one
+  Store.update(id, { name: next });
+  refreshGallery();
+  showToast('Renamed');
+}
+
+async function deleteSpecimen(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  const ok = await confirmDialog({
+    title: 'Delete this specimen?',
+    message: `${record.name} will leave your gallery. This cannot be undone.`,
+    confirmLabel: 'Delete',
+  });
+  if (!ok || !Store.get(id)) return;
+  Store.remove(id);
+  analysisCache.delete(id);
+  buzz([18, 30, 18]);
+  refreshGallery();
+  showToast(`${record.name} was deleted`);
+  return true;
+}
+
+// Breed mode and the detail view both open from here. The gallery opens with its filters and sort kept.
+// Breed mode starts with the given parents (up to two). A normal open leaves breed mode and clears the selection.
+function openGallery(opts = {}) {
+  galleryState.breed = Boolean(opts.breed);
+  breedState.parents = galleryState.breed ? (opts.parents || []).slice(0, 2) : [];
+  navigate('#/gallery');
+}
+
+function initGallery() {
+  cardObserver = new IntersectionObserver(onCardsVisible, { root: $('gGrid'), rootMargin: '240px' });
+  pageObserver = new IntersectionObserver(onSentinel, { root: $('gGrid'), rootMargin: '200px' });
+  $('gSearch').addEventListener(
+    'input',
+    debounce(() => {
+      galleryState.query = $('gSearch').value;
+      galleryState.shown = galleryState.pageSize;
+      paintGrid();
+    }, 120),
+  );
+  $('gSort').addEventListener('change', () => {
+    galleryState.sort = $('gSort').value;
+    galleryState.shown = galleryState.pageSize;
+    paintGrid();
+  });
+  $('sheet').addEventListener('click', (e) => {
+    if (e.target === $('sheet')) closeSheet();
+  });
+}
+
+// Keyboard for the open overlay on top: Escape closes it, and Tab stays inside it while it is open.
+const KEY_OVERLAYS = ['dialog', 'settings', 'sheet', 'overlay-reveal'];
+document.addEventListener('keydown', (e) => {
+  const top = KEY_OVERLAYS.map((id) => $(id)).find((el) => !el.hidden);
+  if (!top) return;
+  if (e.key === 'Escape') {
+    if (top.id === 'dialog') $('dlgCancel').click();
+    else if (top.id === 'settings') closeSettings();
+    else if (top.id === 'sheet') closeSheet();
+    else closeReveal();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const items = [...top.querySelectorAll('button:not([disabled]), input, select, textarea')].filter((el) => el.checkVisibility());
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const inside = top.contains(document.activeElement);
+  if (e.shiftKey && (!inside || document.activeElement === first)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (!inside || document.activeElement === last)) {
+    e.preventDefault();
+    first.focus();
+  }
+});
+
+/* ---------- Detail: one specimen in full, with lineage and actions ---------- */
+let detailView = null;
+let detail = { id: null, showAll: false };
+const ORIGIN_LABELS = ['from parent A', 'from parent B', 'shared', 'mutated'];
+
+// Move to a screen by pushing its URL. Each entry records the URL it came from, so a back arrow can step back through history.
+function navigate(hash, { replace = false } = {}) {
+  if ((location.hash || '#/') !== hash) {
+    if (replace) history.replaceState(null, '', hash);
+    else history.pushState({ from: location.hash || '#/' }, '', hash);
+  }
+  route();
+}
+
+// A back arrow steps back through history when the previous entry is the screen it names, so Back and the arrow agree.
+// Otherwise it replaces this entry with that screen, so Back never returns to the screen just left.
+function goBack(hash) {
+  if (history.state && history.state.from === hash) history.back();
+  else navigate(hash, { replace: true });
+}
+
+// Draw the screen the URL names: #/plant/<id> is a specimen, #/gallery the gallery, anything else home.
+// It never pushes, so Back and Forward (popstate, hashchange) cannot loop.
+function route() {
+  const m = /^#\/plant\/(.+)$/.exec(location.hash);
+  if (m && Store.get(m[1])) {
+    go('detail', m[1]);
+    return;
+  }
+  if (m) {
+    // An unknown id replaces its own entry, so Back does not return to it.
+    history.replaceState(null, '', '#/gallery');
+    showToast('That specimen is gone.');
+  }
+  go(location.hash === '#/gallery' ? 'gallery' : 'home');
+}
+
+function openDetail(id) {
+  navigate(`#/plant/${id}`);
+}
+
+function renderBadges(record, analysis) {
+  const box = $('dtBadges');
+  box.textContent = '';
+  const tier = document.createElement('span');
+  tier.className = `tier-chip tier-${analysis.tier.id}`;
+  tier.textContent = analysis.tier.label;
+  box.append(tier);
+  if (isHybrid(record)) {
+    const badge = document.createElement('span');
+    badge.className = 'badge hybrid';
+    badge.textContent = 'Hybrid';
+    box.append(badge);
+  }
+  if (record.gen > 0) {
+    const gen = document.createElement('span');
+    gen.className = 'gen';
+    gen.textContent = `Gen ${record.gen}`;
+    box.append(gen);
+  }
+}
+
+// Lineage for a hybrid: the generation line, a card per parent from the snapshots it keeps, and the mutation callout.
+// Pure plants hide all three. The detail view and the reveal both paint through here.
+function paintLineage(record, els) {
+  const hybrid = Boolean(record.parents);
+  els.line.hidden = !hybrid;
+  els.line.textContent = hybrid ? `Generation ${record.gen} · bred from two parents` : '';
+  els.parents.hidden = !hybrid;
+  els.parents.textContent = '';
+  if (hybrid) record.parents.forEach((parent, i) => els.parents.append(parentCard(parent, i === 0 ? 'Parent A' : 'Parent B')));
+  const callout = hybrid && record.mutations && record.mutations.length
+    ? `Mutation: ${record.mutations.map((m) => `${GENES[m.gene].label} → ${GENES[m.gene].alleles[m.allele].name}`).join(', ')}`
+    : '';
+  els.mutation.hidden = !callout;
+  els.mutation.textContent = callout;
+}
+
+// A parent as a card: its thumbnail and its name, labelled by slot.
+function parentCard(parent, label) {
+  const card = document.createElement('div');
+  card.className = 'parent';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = renderThumb(parent);
+  const text = document.createElement('p');
+  text.className = 'parent-name';
+  text.textContent = `${label} · ${parent.name}`;
+  card.append(img, text);
+  return card;
+}
+
+// One notable trait: its allele, its gene with the origin tag when the plant has one, and its rarity.
+function traitRow(record, { gene, allele }) {
+  const li = document.createElement('li');
+  li.className = 'trait';
+  const left = document.createElement('div');
+  const name = document.createElement('span');
+  name.className = 'trait-name';
+  name.textContent = allele.name;
+  const geneLabel = document.createElement('span');
+  geneLabel.className = 'trait-gene';
+  geneLabel.textContent = record.origin ? `${gene.label} · ${ORIGIN_LABELS[record.origin[gene.i]]}` : gene.label;
+  left.append(name, geneLabel);
+  const pct = document.createElement('span');
+  pct.className = `trait-pct r-${rarityClass(allele.p)}`;
+  pct.textContent = formatPct(allele.p * 100);
+  li.append(left, pct);
+  return li;
+}
+
+function renderTraitList(record, analysis) {
+  const list = $('dtTraits');
+  list.textContent = '';
+  const items = detail.showAll ? analysis.notable : analysis.notable.slice(0, 8);
+  for (const item of items) list.append(traitRow(record, item));
+  const more = $('dtShowAll');
+  more.hidden = analysis.notable.length <= 8;
+  more.textContent = detail.showAll ? 'Show fewer traits' : `Show all ${analysis.notable.length} traits`;
+}
+
+// The full genome: every gene in its group, with the allele and its percentage.
+function renderGenome(record) {
+  const box = $('dtGenome');
+  box.textContent = '';
+  for (const group of GENE_GROUPS) {
+    const heading = document.createElement('h4');
+    heading.textContent = group.label;
+    const list = document.createElement('ul');
+    for (const gene of GENES.filter((g) => g.group === group.id)) {
+      const allele = gene.alleles[record.genes[gene.i]];
+      const item = document.createElement('li');
+      item.textContent = `${gene.label}: ${allele.name} · ${formatPct(allele.p * 100)}`;
+      list.append(item);
+    }
+    box.append(heading, list);
+  }
+}
+
+function setFavoriteButton(record) {
+  const b = $('dtFavorite');
+  b.textContent = record.fav ? '★ Favorited' : '☆ Favorite';
+  b.setAttribute('aria-pressed', String(record.fav));
+}
+
+function renderDetail(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  detail = { id, showAll: false };
+  const analysis = analysisOf(record);
+  $('dtName').textContent = record.name;
+  renderBadges(record, analysis);
+  const chip = $('dtTier');
+  chip.textContent = analysis.tier.label;
+  chip.className = `tier-chip tier-${analysis.tier.id}`;
+  $('dtScore').textContent = `Rarity ${analysis.score.toFixed(1)} / 100`;
+  $('dtPctl').textContent = `Rarer than ${analysis.score.toFixed(1)}% of plants`;
+  const meter = $('dtMeter');
+  meter.style.width = '0%';
+  requestAnimationFrame(() => {
+    meter.style.width = `${analysis.score.toFixed(1)}%`;
+  });
+  paintLineage(record, { line: $('dtLineage'), parents: $('dtParents'), mutation: $('dtMutation') });
+  renderTraitList(record, analysis);
+  renderGenome(record);
+  setFavoriteButton(record);
+  detailView.resize();
+  detailView.setPlant(record, { animate: true, growDuration: 1.2, ...auraOptions(record) });
+  detailView.start();
+}
+
+function initDetail() {
+  $('dtFavorite').addEventListener('click', () => {
+    const record = Store.get(detail.id);
+    if (!record) return;
+    Store.update(record.id, { fav: !record.fav });
+    buzz([6]);
+    setFavoriteButton(Store.get(record.id));
+  });
+  $('dtRename').addEventListener('click', async () => {
+    const id = detail.id;
+    await renameSpecimen(id);
+    const record = Store.get(id);
+    if (record && detail.id === id) $('dtName').textContent = record.name;
+  });
+  $('dtShowAll').addEventListener('click', () => {
+    const record = Store.get(detail.id);
+    if (!record) return;
+    detail.showAll = !detail.showAll;
+    renderTraitList(record, analysisOf(record));
+  });
+  $('dtUse').addEventListener('click', () => {
+    openGallery({ breed: true, parents: [detail.id] });
+  });
+  $('dtDelete').addEventListener('click', async () => {
+    const id = detail.id;
+    if (await deleteSpecimen(id)) navigate('#/gallery', { replace: true });
+  });
+}
+
+/* ---------- Share and settings: the poster, haptics, particles, and reset ---------- */
+const POSTER = { w: 1080, h: 1350 };
+const POSTER_SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
+const POSTER_SANS = '"Helvetica Neue", Arial, sans-serif';
+let sharing = false;
+
+// Sets the font so the text fits maxWidth, shrinking it to at most 60% of its size.
+function fitFont(ctx, text, maxWidth, size, family) {
+  let px = size;
+  ctx.font = `${px}px ${family}`;
+  while (ctx.measureText(text).width > maxWidth && px > size * 0.6) {
+    px -= 2;
+    ctx.font = `${px}px ${family}`;
+  }
+}
+
+// The share poster: the plant at full size on the garden's gradient, with its name, tier, rarity, top traits,
+// lineage, and the garden's name. It is drawn in one pass, so it can be exported at once.
+function drawPoster(record) {
+  const analysis = analyze(record.genes);
+  const canvas = document.createElement('canvas');
+  canvas.width = POSTER.w;
+  canvas.height = POSTER.h;
+  const ctx = canvas.getContext('2d');
+  const sky = ctx.createLinearGradient(0, 0, 0, POSTER.h);
+  sky.addColorStop(0, '#1d4a36');
+  sky.addColorStop(0.55, '#0a1f16');
+  sky.addColorStop(1, '#04100b');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, POSTER.w, POSTER.h);
+  const glow = ctx.createRadialGradient(POSTER.w / 2, 440, 60, POSTER.w / 2, 440, 560);
+  glow.addColorStop(0, 'rgba(233, 201, 119, 0.22)');
+  glow.addColorStop(1, 'rgba(233, 201, 119, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, POSTER.w, POSTER.h);
+
+  const plant = document.createElement('canvas');
+  const view = new PlantView(plant, { width: 960, height: 760, dpr: 1, particles: false });
+  view.motion = 0;
+  view.setPlant(record, { animate: false, ...auraOptions(record) });
+  view.drawFrame(0, 1);
+  ctx.drawImage(plant, 60, 50);
+
+  const center = POSTER.w / 2;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#f2f6ea';
+  fitFont(ctx, record.name, 960, 84, POSTER_SERIF);
+  ctx.fillText(record.name, center, 920);
+
+  const tierColor = getComputedStyle(document.documentElement).getPropertyValue(`--tier-${analysis.tier.id}`).trim();
+  ctx.fillStyle = tierColor || '#e9c977';
+  ctx.font = `600 38px ${POSTER_SANS}`;
+  ctx.fillText(`${analysis.tier.label.toUpperCase()} · RARITY ${analysis.score.toFixed(1)} / 100`, center, 990);
+
+  ctx.fillStyle = '#c3d4c0';
+  ctx.font = `400 36px ${POSTER_SERIF}`;
+  analysis.notable.slice(0, 3).forEach(({ allele, gene }, i) => {
+    ctx.fillText(`${allele.name} · ${gene.label} · ${formatPct(allele.p * 100)}`, center, 1070 + i * 52);
+  });
+
+  ctx.fillStyle = '#8aa48f';
+  ctx.font = `400 32px ${POSTER_SANS}`;
+  const lineage = record.parents
+    ? `Generation ${record.gen} · Parents ${record.parents[0].name} and ${record.parents[1].name}`
+    : 'Pure specimen';
+  fitFont(ctx, lineage, 960, 32, POSTER_SANS);
+  ctx.fillText(lineage, center, 1245);
+
+  ctx.strokeStyle = 'rgba(233, 201, 119, 0.5)';
+  ctx.beginPath();
+  ctx.moveTo(center - 240, 1275);
+  ctx.lineTo(center + 240, 1275);
+  ctx.stroke();
+  ctx.fillStyle = '#e9c977';
+  ctx.font = `italic 34px ${POSTER_SERIF}`;
+  ctx.fillText('Endless Garden', center, 1322);
+  return canvas;
+}
+
+function posterBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('the poster could not be encoded'))), 'image/png');
+  });
+}
+
+// Shares the poster as a PNG file when the device accepts files. Otherwise, or when sharing fails, it downloads.
+// Resolves to 'shared', 'cancelled', or 'downloaded'.
+async function sharePoster(record) {
+  const blob = await posterBlob(drawPoster(record));
+  const slug = record.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'specimen';
+  const file = new File([blob], `${slug}.png`, { type: 'image/png' });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: record.name });
+      return 'shared';
+    } catch (err) {
+      if (err.name === 'AbortError') return 'cancelled';
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'downloaded';
+}
+
+// One share at a time. A poster that cannot be made says so, and nothing else changes.
+async function shareDetail() {
+  const record = Store.get(detail.id);
+  if (!record || sharing) return;
+  sharing = true;
+  try {
+    const result = await sharePoster(record);
+    if (result === 'downloaded') showToast('Poster downloaded');
+  } catch (err) {
+    showToast('The poster could not be made.');
+  } finally {
+    sharing = false;
+  }
+}
+
+// Settings: two switches and Reset. Settings are saved with the garden, and Reset keeps them.
+function openSettings() {
+  paintSettings();
+  $('settings').hidden = false;
+  $('stHaptics').focus();
+}
+
+function closeSettings() {
+  $('settings').hidden = true;
+}
+
+function paintSettings() {
+  for (const [id, key] of [['stHaptics', 'haptics'], ['stParticles', 'particles']]) {
+    const on = Store.settings[key];
+    $(id).classList.toggle('on', on);
+    $(id).setAttribute('aria-checked', String(on));
+  }
+}
+
+// A switch flips its setting, saves it, and applies it to the plants on screen.
+function setSetting(key, value) {
+  Store.settings[key] = value;
+  Store.save();
+  applyParticles();
+  paintSettings();
+}
+
+// Particles are switched per view. Thumbnails never draw them.
+function applyParticles() {
+  for (const view of [homeView, revealView, detailView]) view.opts.particles = Store.settings.particles;
+}
+
+// Reset empties the garden after a confirmation. The settings stay.
+async function resetGarden() {
+  const ok = await confirmDialog({
+    title: 'Reset your garden?',
+    message: 'Every specimen leaves your gallery. Settings stay. This cannot be undone.',
+    confirmLabel: 'Reset',
+  });
+  if (!ok) return;
+  Store.reset();
+  closeSettings();
+  refreshVisible();
+  showToast('The garden is empty again');
+}
+
+// Plants are drawn with Canvas 2D. A browser without it gets a short message instead of a broken garden.
+function canDraw() {
+  try {
+    return Boolean(document.createElement('canvas').getContext('2d'));
+  } catch (err) {
+    return false;
+  }
+}
+
+function init() {
+  if (!canDraw()) {
+    $('app').hidden = true;
+    $('noCanvas').hidden = false;
+    return;
+  }
+  homeView = new PlantView($('homeCanvas'), {});
+  revealView = new PlantView($('rvCanvas'), {});
+  $('btnGenerate').addEventListener('click', generateFlow);
+  $('rvSave').addEventListener('click', saveReveal);
+  $('rvAgain').addEventListener('click', () => {
+    const parents = reveal && reveal.parents;
+    closeReveal();
+    if (parents) breedFlow(parents);
+    else generateFlow();
+  });
+  $('btnGallery').addEventListener('click', () => openGallery());
+  $('specimen').addEventListener('click', () => {
+    const latest = Store.all()[0];
+    if (latest) openDetail(latest.id);
+  });
+  $('gBreed').addEventListener('click', toggleBreedMode);
+  $('btnHybridize').addEventListener('click', () => openGallery({ breed: true }));
+  $('breedGo').addEventListener('click', hybridize);
+  $('rvClose').addEventListener('click', closeReveal);
+  // Forward buttons push their screen; back arrows (data-back) step back through history.
+  document.querySelectorAll('[data-nav]').forEach((el) => {
+    const hash = el.dataset.nav === 'gallery' ? '#/gallery' : '#/';
+    el.addEventListener('click', () => (el.hasAttribute('data-back') ? goBack(hash) : navigate(hash)));
+  });
+  initGallery();
+  initDetail();
+  detailView = new PlantView($('dtCanvas'), {});
+  applyParticles();
+  // Each plant canvas re-fits when its box changes size: a turn, a window resize, or a screen being shown.
+  const plantViews = new Map([[$('homeCanvas'), homeView], [$('rvCanvas'), revealView], [$('dtCanvas'), detailView]]);
+  const plantBoxes = new ResizeObserver((entries) => {
+    for (const entry of entries) plantViews.get(entry.target).resize();
+  });
+  plantViews.forEach((view, canvas) => plantBoxes.observe(canvas));
+  $('dtShare').addEventListener('click', shareDetail);
+  $('btnSettings').addEventListener('click', openSettings);
+  $('stHaptics').addEventListener('click', () => setSetting('haptics', !Store.settings.haptics));
+  $('stParticles').addEventListener('click', () => setSetting('particles', !Store.settings.particles));
+  $('stReset').addEventListener('click', resetGarden);
+  $('stClose').addEventListener('click', closeSettings);
+  $('settings').addEventListener('click', (e) => {
+    if (e.target === $('settings')) closeSettings();
+  });
+  // Back and Forward fire popstate, and a fragment change also fires hashchange. Both draw the same URL.
+  window.addEventListener('popstate', route);
+  window.addEventListener('hashchange', route);
+  route();
+}
+
+EG.newPlant = newPlant;
+EG.openLab = openLab;
+EG.openReveal = openReveal;
+EG.closeReveal = closeReveal;
+EG.buzz = buzz;
+EG.go = go;
+EG.openGallery = openGallery;
+EG.visibleList = visibleList;
+EG.openSheet = openSheet;
+EG.promptText = promptText;
+EG.confirmDialog = confirmDialog;
+EG.galleryState = galleryState;
+EG.breedState = breedState;
+EG.openDetail = openDetail;
+EG.route = route;
+
+init();
+
+</script>
+</body>
+</html>
