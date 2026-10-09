@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#061510">
+<meta name="description" content="Endless Garden: a procedural botanical game of 45-gene plants, rarity tiers, and hybridization.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M12 52C12 26 28 12 54 10c-2 26-16 42-42 42z' fill='%23e9c977'/%3E%3C/svg%3E">
+<title>Endless Garden</title>
+<style>
+/* ---------- Design tokens: one dark botanical theme ---------- */
+:root {
+  --bg0: #061510;
+  --bg1: #0c2319;
+  --bg2: #163d2e;
+  --ink: #f2f6ea;
+  --ink-2: #c3d4c0;
+  --ink-3: #8aa48f;
+  --gold: #e9c977;
+  --gold-2: #b98f45;
+  --line: rgba(233, 201, 119, 0.2);
+  --card: rgba(255, 255, 255, 0.045);
+  --glass: rgba(7, 24, 18, 0.88);
+  --tier-common: #a9bcae;
+  --tier-uncommon: #86e09a;
+  --tier-rare: #6cc9ee;
+  --tier-epic: #bb97ff;
+  --tier-legendary: #ffd27a;
+  --tier-mythic: #ff86e0;
+  --radius: 20px;
+  --touch: 48px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ---------- Base and shell ---------- */
+[hidden] { display: none !important; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background-color: var(--bg0);
+  background-image:
+    radial-gradient(120% 70% at 50% -12%, #1f4d38 0%, rgba(31, 77, 56, 0) 62%),
+    radial-gradient(90% 60% at 100% 112%, #143d2d 0%, rgba(20, 61, 45, 0) 60%),
+    linear-gradient(180deg, #0c2319 0%, var(--bg0) 72%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+#app { position: fixed; inset: 0; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.noscript { padding: 24px; text-align: center; font-family: var(--serif); }
+
+.screen {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  padding: calc(var(--safe-t) + 14px) calc(var(--safe-r) + 16px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 16px);
+  opacity: 0; visibility: hidden; transform: translateY(12px);
+  transition: opacity .42s ease, transform .42s ease, visibility 0s linear .42s;
+}
+.screen.active { opacity: 1; visibility: visible; transform: none; transition: opacity .42s ease, transform .42s ease, visibility 0s; }
+.topbar { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+.brand-block { min-width: 0; }
+.brand { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 7vw, 36px); letter-spacing: 0.01em; color: var(--ink); }
+.title { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 24px; }
+.sub { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
+.icon-btn {
+  width: var(--touch); height: var(--touch); display: inline-grid; place-items: center; flex: 0 0 auto;
+  border-radius: 50%; font-size: 26px; line-height: 1; background: var(--card); border: 1px solid var(--line);
+}
+.overlay {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: rgba(3, 12, 8, 0.78);
+}
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--safe-b) + 22px); z-index: 80;
+  transform: translate(-50%, 16px); max-width: min(92vw, 420px); padding: 12px 18px;
+  border-radius: 14px; background: var(--glass); border: 1px solid var(--line);
+  color: var(--ink); font-size: 14px; text-align: center; opacity: 0; pointer-events: none;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .screen, .toast { transition: none !important; } }
+
+/* @@css:components */
+</style>
+</head>
+<body>
+<noscript><p class="noscript">Endless Garden needs JavaScript to grow.</p></noscript>
+<div id="app">
+  <section id="screen-home" class="screen active" aria-label="Home">
+    <header class="topbar">
+      <div class="brand-block">
+        <h1 class="brand">Endless Garden</h1>
+        <p class="sub">A living botanical laboratory</p>
+      </div>
+    </header>
+    <!-- @@html:home -->
+  </section>
+
+  <section id="screen-gallery" class="screen" aria-label="Gallery">
+    <header class="topbar">
+      <button class="icon-btn" type="button" data-nav="home" aria-label="Back to home">&#8249;</button>
+      <div class="brand-block"><h2 class="title">Gallery</h2></div>
+    </header>
+    <!-- @@html:gallery -->
+  </section>
+
+  <section id="screen-detail" class="screen" aria-label="Specimen details">
+    <header class="topbar">
+      <button class="icon-btn" type="button" data-nav="gallery" aria-label="Back to gallery">&#8249;</button>
+      <div class="brand-block"><h2 class="title">Specimen</h2></div>
+    </header>
+    <!-- @@html:detail -->
+  </section>
+
+  <div id="overlay-lab" class="overlay lab" hidden role="status" aria-live="polite">
+    <!-- @@html:lab -->
+  </div>
+  <div id="overlay-reveal" class="overlay reveal" hidden role="dialog" aria-modal="true" aria-label="Specimen reveal">
+    <!-- @@html:reveal -->
+  </div>
+  <div id="sheet" class="overlay sheet" hidden role="dialog" aria-modal="true" aria-label="Actions">
+    <!-- @@html:sheet -->
+  </div>
+  <div id="dialog" class="overlay dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <!-- @@html:dialog -->
+  </div>
+  <div id="settings" class="overlay settings" hidden role="dialog" aria-modal="true" aria-label="Settings">
+    <!-- @@html:settings -->
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+'use strict';
+/*
+ * Endless Garden: one file, labelled sections.
+ * Genetics, Naming, Layout, Renderer, Loop, Store, UI.
+ * window.EndlessGarden (alias EG) exposes helpers for automated checks.
+ */
+const EG = (window.EndlessGarden = window.EndlessGarden || {});
+
+/* ===== Genetics ===== */
+/* @@js:genetics */
+
+/* ===== Naming ===== */
+/* @@js:naming */
+
+/* ===== Layout ===== */
+/* @@js:layout */
+
+/* ===== Renderer ===== */
+/* @@js:renderer */
+
+/* ===== Loop ===== */
+/* @@js:loop */
+
+/* ===== Store ===== */
+/* @@js:store */
+
+/* ===== UI ===== */
+/* @@js:ui */
+</script>
+</body>
+</html>
