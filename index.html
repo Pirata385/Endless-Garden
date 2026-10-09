@@ -352,6 +352,26 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .rv-parents .parent img { width: 44px; height: 44px; max-width: none; flex: 0 0 auto; }
 .rv-parents .parent-name { text-align: left; min-width: 0; overflow-wrap: anywhere; }
 
+/* ---------- Settings and sharing ---------- */
+.overlay.dialog { z-index: 60; }
+.overlay.settings { align-items: flex-end; justify-content: stretch; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; }
+.setting-name { margin: 0; font-size: 16px; }
+.setting-hint { margin: 0; font-size: 13px; color: var(--ink-3); line-height: 1.4; }
+.switch { position: relative; width: 56px; height: 44px; flex: 0 0 auto; }
+.switch::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 10px; height: 24px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid var(--line); transition: background 0.2s ease;
+}
+.switch::after {
+  content: ''; position: absolute; left: 4px; top: 14px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--ink-2); transition: transform 0.2s ease, background 0.2s ease;
+}
+.switch.on::before { background: rgba(127, 211, 181, 0.35); border-color: rgba(127, 211, 181, 0.6); }
+.switch.on::after { transform: translateX(32px); background: var(--gold); }
+#btnSettings { margin-left: auto; }
+.detail-actions #dtUse { grid-column: 1 / -1; }
+
 /* @@css:components */
 </style>
 </head>
@@ -364,6 +384,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
         <h1 class="brand">Endless Garden</h1>
         <p class="sub">A living botanical laboratory</p>
       </div>
+      <button type="button" class="icon-btn" id="btnSettings" aria-label="Settings">&#9881;</button>
     </header>
     <div class="home-stage">
       <div class="specimen" id="specimen">
@@ -445,6 +466,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
         </details>
         <div class="detail-actions">
           <button type="button" class="btn-secondary" id="dtFavorite"></button>
+          <button type="button" class="btn-secondary" id="dtShare">Share</button>
           <button type="button" class="btn-secondary" id="dtUse">Use as parent</button>
           <button type="button" class="btn-danger" id="dtDelete">Delete</button>
         </div>
@@ -497,7 +519,26 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
     <!-- @@html:dialog -->
   </div>
   <div id="settings" class="overlay settings" hidden role="dialog" aria-modal="true" aria-label="Settings">
-    <!-- @@html:settings -->
+    <div class="sheet-card">
+      <p class="sheet-title">Settings</p>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Haptics</p>
+          <p class="setting-hint">A short buzz on save and delete, where the device allows it.</p>
+        </div>
+        <button type="button" class="switch" id="stHaptics" role="switch" aria-checked="true" aria-label="Haptics"></button>
+      </div>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Particles</p>
+          <p class="setting-hint">Pollen, petals, and light drifting around plants.</p>
+        </div>
+        <button type="button" class="switch" id="stParticles" role="switch" aria-checked="true" aria-label="Particles"></button>
+      </div>
+      <button type="button" class="btn-danger" id="stReset">Reset garden</button>
+      <p class="setting-hint">Removes every specimen. Settings stay.</p>
+      <button type="button" class="btn-secondary" id="stClose">Done</button>
+    </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </div>
@@ -1979,6 +2020,7 @@ class PlantView {
   }
 
   drawParticles(ctx, t, U, baseX, baseY) {
+    if (this.opts.particles === false) return;
     if (this.rt.traits.particleEffect.v === 'rays' && !this.opts.thumb) drawRays(ctx, U, baseX, baseY, t);
     if (!this.particles.length) return;
     ctx.save();
@@ -2507,6 +2549,12 @@ const Store = {
     this.plants.splice(i, 1);
     this.save();
     return true;
+  },
+
+  // Removes every specimen. Settings stay.
+  reset() {
+    this.plants = [];
+    this.save();
   },
 };
 
@@ -3600,6 +3648,177 @@ function initDetail() {
   });
 }
 
+/* ---------- Share and settings: the poster, haptics, particles, and reset ---------- */
+const POSTER = { w: 1080, h: 1350 };
+const POSTER_SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
+const POSTER_SANS = '"Helvetica Neue", Arial, sans-serif';
+let sharing = false;
+
+// Sets the font so the text fits maxWidth, shrinking it to at most 60% of its size.
+function fitFont(ctx, text, maxWidth, size, family) {
+  let px = size;
+  ctx.font = `${px}px ${family}`;
+  while (ctx.measureText(text).width > maxWidth && px > size * 0.6) {
+    px -= 2;
+    ctx.font = `${px}px ${family}`;
+  }
+}
+
+// The share poster: the plant at full size on the garden's gradient, with its name, tier, rarity, top traits,
+// lineage, and the garden's name. It is drawn in one pass, so it can be exported at once.
+function drawPoster(record) {
+  const analysis = analyze(record.genes);
+  const canvas = document.createElement('canvas');
+  canvas.width = POSTER.w;
+  canvas.height = POSTER.h;
+  const ctx = canvas.getContext('2d');
+  const sky = ctx.createLinearGradient(0, 0, 0, POSTER.h);
+  sky.addColorStop(0, '#1d4a36');
+  sky.addColorStop(0.55, '#0a1f16');
+  sky.addColorStop(1, '#04100b');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, POSTER.w, POSTER.h);
+  const glow = ctx.createRadialGradient(POSTER.w / 2, 440, 60, POSTER.w / 2, 440, 560);
+  glow.addColorStop(0, 'rgba(233, 201, 119, 0.22)');
+  glow.addColorStop(1, 'rgba(233, 201, 119, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, POSTER.w, POSTER.h);
+
+  const plant = document.createElement('canvas');
+  const view = new PlantView(plant, { width: 960, height: 760, dpr: 1, particles: false });
+  view.motion = 0;
+  view.setPlant(record, { animate: false, ...auraOptions(record) });
+  view.drawFrame(0, 1);
+  ctx.drawImage(plant, 60, 50);
+
+  const center = POSTER.w / 2;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#f2f6ea';
+  fitFont(ctx, record.name, 960, 84, POSTER_SERIF);
+  ctx.fillText(record.name, center, 920);
+
+  const tierColor = getComputedStyle(document.documentElement).getPropertyValue(`--tier-${analysis.tier.id}`).trim();
+  ctx.fillStyle = tierColor || '#e9c977';
+  ctx.font = `600 38px ${POSTER_SANS}`;
+  ctx.fillText(`${analysis.tier.label.toUpperCase()} · RARITY ${analysis.score.toFixed(1)} / 100`, center, 990);
+
+  ctx.fillStyle = '#c3d4c0';
+  ctx.font = `400 36px ${POSTER_SERIF}`;
+  analysis.notable.slice(0, 3).forEach(({ allele, gene }, i) => {
+    ctx.fillText(`${allele.name} · ${gene.label} · ${formatPct(allele.p * 100)}`, center, 1070 + i * 52);
+  });
+
+  ctx.fillStyle = '#8aa48f';
+  ctx.font = `400 32px ${POSTER_SANS}`;
+  const lineage = record.parents
+    ? `Generation ${record.gen} · Parents ${record.parents[0].name} and ${record.parents[1].name}`
+    : 'Pure specimen';
+  fitFont(ctx, lineage, 960, 32, POSTER_SANS);
+  ctx.fillText(lineage, center, 1245);
+
+  ctx.strokeStyle = 'rgba(233, 201, 119, 0.5)';
+  ctx.beginPath();
+  ctx.moveTo(center - 240, 1275);
+  ctx.lineTo(center + 240, 1275);
+  ctx.stroke();
+  ctx.fillStyle = '#e9c977';
+  ctx.font = `italic 34px ${POSTER_SERIF}`;
+  ctx.fillText('Endless Garden', center, 1322);
+  return canvas;
+}
+
+function posterBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('the poster could not be encoded'))), 'image/png');
+  });
+}
+
+// Shares the poster as a PNG file when the device accepts files. Otherwise, or when sharing fails, it downloads.
+// Resolves to 'shared', 'cancelled', or 'downloaded'.
+async function sharePoster(record) {
+  const blob = await posterBlob(drawPoster(record));
+  const slug = record.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'specimen';
+  const file = new File([blob], `${slug}.png`, { type: 'image/png' });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: record.name });
+      return 'shared';
+    } catch (err) {
+      if (err.name === 'AbortError') return 'cancelled';
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'downloaded';
+}
+
+// One share at a time. A poster that cannot be made says so, and nothing else changes.
+async function shareDetail() {
+  const record = Store.get(detail.id);
+  if (!record || sharing) return;
+  sharing = true;
+  try {
+    const result = await sharePoster(record);
+    if (result === 'downloaded') showToast('Poster downloaded');
+  } catch (err) {
+    showToast('The poster could not be made.');
+  } finally {
+    sharing = false;
+  }
+}
+
+// Settings: two switches and Reset. Settings are saved with the garden, and Reset keeps them.
+function openSettings() {
+  paintSettings();
+  $('settings').hidden = false;
+}
+
+function closeSettings() {
+  $('settings').hidden = true;
+}
+
+function paintSettings() {
+  for (const [id, key] of [['stHaptics', 'haptics'], ['stParticles', 'particles']]) {
+    const on = Store.settings[key];
+    $(id).classList.toggle('on', on);
+    $(id).setAttribute('aria-checked', String(on));
+  }
+}
+
+// A switch flips its setting, saves it, and applies it to the plants on screen.
+function setSetting(key, value) {
+  Store.settings[key] = value;
+  Store.save();
+  applyParticles();
+  paintSettings();
+}
+
+// Particles are switched per view. Thumbnails never draw them.
+function applyParticles() {
+  for (const view of [homeView, revealView, detailView]) view.opts.particles = Store.settings.particles;
+}
+
+// Reset empties the garden after a confirmation. The settings stay.
+async function resetGarden() {
+  const ok = await confirmDialog({
+    title: 'Reset your garden?',
+    message: 'Every specimen leaves your gallery. Settings stay. This cannot be undone.',
+    confirmLabel: 'Reset',
+  });
+  if (!ok) return;
+  Store.reset();
+  closeSettings();
+  refreshVisible();
+  showToast('The garden is empty again');
+}
+
 function init() {
   homeView = new PlantView($('homeCanvas'), {});
   revealView = new PlantView($('rvCanvas'), {});
@@ -3628,6 +3847,16 @@ function init() {
   initGallery();
   initDetail();
   detailView = new PlantView($('dtCanvas'), {});
+  applyParticles();
+  $('dtShare').addEventListener('click', shareDetail);
+  $('btnSettings').addEventListener('click', openSettings);
+  $('stHaptics').addEventListener('click', () => setSetting('haptics', !Store.settings.haptics));
+  $('stParticles').addEventListener('click', () => setSetting('particles', !Store.settings.particles));
+  $('stReset').addEventListener('click', resetGarden);
+  $('stClose').addEventListener('click', closeSettings);
+  $('settings').addEventListener('click', (e) => {
+    if (e.target === $('settings')) closeSettings();
+  });
   // Back and Forward fire popstate, and a fragment change also fires hashchange. Both draw the same URL.
   window.addEventListener('popstate', route);
   window.addEventListener('hashchange', route);
