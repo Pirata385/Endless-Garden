@@ -281,6 +281,46 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .dialog-actions button { flex: 1; }
 .btn-danger { min-height: 48px; padding: 0 18px; border-radius: 999px; background: #c9574e; color: #fff; font-weight: 600; }
 
+/* ---------- Detail ---------- */
+.detail-body {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+  padding-bottom: calc(var(--safe-b) + 20px);
+}
+.detail-hero {
+  position: relative; flex: 0 0 auto; height: min(46vh, 400px); border-radius: 26px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%), rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+}
+.detail-hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.detail-hero .badges { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.detail-hero .gen { padding: 3px 8px; border-radius: 999px; background: rgba(7, 24, 18, 0.72); color: var(--ink); }
+.detail-info { display: grid; gap: 12px; }
+.name-row { display: flex; align-items: center; gap: 10px; }
+.dt-name {
+  margin: 0; flex: 1; min-width: 0; font-family: var(--serif); font-weight: 400;
+  font-size: clamp(24px, 6.4vw, 30px); line-height: 1.15; overflow-wrap: anywhere;
+}
+.name-row .icon-btn { width: 44px; height: 44px; font-size: 18px; }
+.parents { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.parent {
+  display: grid; gap: 4px; justify-items: center; padding: 8px; border-radius: 16px;
+  background: var(--card); border: 1px solid var(--line);
+}
+.parent img { width: 100%; max-width: 120px; aspect-ratio: 1; object-fit: contain; }
+.parent-name { margin: 0; font-size: 12px; color: var(--ink-2); text-align: center; }
+.mutation-note { margin: 0; font-size: 13px; color: var(--gold); }
+.rarity-card { padding: 14px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); display: grid; gap: 10px; }
+.show-all { align-self: flex-start; }
+.genome { border-radius: 16px; background: var(--card); border: 1px solid var(--line); padding: 4px 14px 12px; }
+.genome summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; }
+.genome summary::after { content: '▾'; color: var(--ink-2); transition: transform 0.2s ease; }
+.genome[open] summary::after { transform: rotate(180deg); }
+.genome h4 { margin: 10px 0 4px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+.genome ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.detail-actions .btn-danger { grid-column: 1 / -1; }
+.trait-gene { overflow-wrap: anywhere; }
+
 /* @@css:components */
 </style>
 </head>
@@ -312,7 +352,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
   <section id="screen-gallery" class="screen" aria-label="Gallery">
     <header class="topbar">
-      <button class="icon-btn" type="button" data-nav="home" aria-label="Back to home">&#8249;</button>
+      <button class="icon-btn" type="button" data-nav="home" data-back aria-label="Back to home">&#8249;</button>
       <div class="brand-block"><h2 class="title">Gallery</h2></div>
     </header>
     <div class="gallery-tools">
@@ -334,10 +374,41 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
   <section id="screen-detail" class="screen" aria-label="Specimen details">
     <header class="topbar">
-      <button class="icon-btn" type="button" data-nav="gallery" aria-label="Back to gallery">&#8249;</button>
+      <button class="icon-btn" type="button" data-nav="gallery" data-back aria-label="Back to gallery">&#8249;</button>
       <div class="brand-block"><h2 class="title">Specimen</h2></div>
     </header>
-    <!-- @@html:detail -->
+    <div class="detail-body">
+      <div class="detail-hero">
+        <canvas id="dtCanvas" aria-hidden="true"></canvas>
+        <div class="badges" id="dtBadges"></div>
+      </div>
+      <div class="detail-info">
+        <div class="name-row">
+          <h2 class="dt-name" id="dtName"></h2>
+          <button type="button" class="icon-btn" id="dtRename" aria-label="Rename specimen">&#9998;</button>
+        </div>
+        <p class="rv-lineage" id="dtLineage" hidden></p>
+        <div class="parents" id="dtParents" hidden></div>
+        <p class="mutation-note" id="dtMutation" hidden></p>
+        <div class="rarity-card">
+          <div class="rv-tier-row"><span class="tier-chip" id="dtTier"></span><span class="rv-score" id="dtScore"></span></div>
+          <div class="meter" aria-hidden="true"><div class="meter-fill" id="dtMeter"></div></div>
+          <p class="rv-pctl" id="dtPctl"></p>
+        </div>
+        <h3 class="rv-h">Notable traits</h3>
+        <ul class="traits" id="dtTraits"></ul>
+        <button type="button" class="btn-ghost show-all" id="dtShowAll"></button>
+        <details class="genome">
+          <summary>Full genome · 45 genes</summary>
+          <div id="dtGenome"></div>
+        </details>
+        <div class="detail-actions">
+          <button type="button" class="btn-secondary" id="dtFavorite"></button>
+          <button type="button" class="btn-secondary" id="dtUse">Use as parent</button>
+          <button type="button" class="btn-danger" id="dtDelete">Delete</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <div id="overlay-lab" class="overlay lab" hidden role="status" aria-live="polite">
@@ -2412,8 +2483,8 @@ let revealView = null;
 let reveal = null; // the specimen on screen: { record, saved }
 let busy = false;
 
-// Show one screen. The home preview animates only while home is showing.
-function go(name) {
+// Draw one screen. It never touches history: navigate() and route() own the URL. The home preview animates only while home is showing.
+function go(name, id = null) {
   for (const [key, el] of Object.entries(screenEls)) el.classList.toggle('active', key === name);
   if (name === 'home') {
     renderHome();
@@ -2423,6 +2494,11 @@ function go(name) {
     homeView.stop();
   }
   if (name === 'gallery') renderGallery();
+  if (name === 'detail') {
+    renderDetail(id);
+  } else {
+    detailView.stop();
+  }
 }
 
 function renderHome() {
@@ -2835,7 +2911,7 @@ function renderEmpty(count) {
   if (Store.all().length === 0) {
     text.textContent = 'No specimens yet. Your gallery fills as you save plants.';
     const button = makeButton('Generate a plant', 'btn-primary', 'gGenerate');
-    button.addEventListener('click', () => go('home'));
+    button.addEventListener('click', () => navigate('#/'));
     box.append(text, button);
   } else {
     text.textContent = 'Nothing matches these filters.';
@@ -2955,7 +3031,7 @@ function onSentinel(entries) {
 }
 
 function onCardTap(id) {
-  openActions(id);
+  openDetail(id);
 }
 
 function toggleFavorite(id) {
@@ -3018,6 +3094,7 @@ function openActions(id) {
   const record = Store.get(id);
   if (!record) return;
   openSheet(record, [
+    { id: 'view', label: 'View', run: () => openDetail(id) },
     { id: 'rename', label: 'Rename', run: () => renameSpecimen(id) },
     { id: 'favorite', label: record.fav ? 'Remove from favorites' : 'Add to favorites', run: () => toggleFavorite(id) },
     { id: 'delete', label: 'Delete', danger: true, run: () => deleteSpecimen(id) },
@@ -3134,12 +3211,13 @@ async function deleteSpecimen(id) {
   buzz([18, 30, 18]);
   refreshGallery();
   showToast(`${record.name} was deleted`);
+  return true;
 }
 
 // Breed mode and the detail view both open from here. The gallery opens with its filters and sort kept.
 function openGallery(opts = {}) {
   galleryState.breed = Boolean(opts.breed);
-  go('gallery');
+  navigate('#/gallery');
 }
 
 function initGallery() {
@@ -3166,6 +3244,205 @@ function initGallery() {
   });
 }
 
+/* ---------- Detail: one specimen in full, with lineage and actions ---------- */
+let detailView = null;
+let detail = { id: null, showAll: false };
+const ORIGIN_LABELS = ['from parent A', 'from parent B', 'shared', 'mutated'];
+
+// Move to a screen by pushing its URL. Each entry records the URL it came from, so a back arrow can step back through history.
+function navigate(hash, { replace = false } = {}) {
+  if ((location.hash || '#/') !== hash) {
+    if (replace) history.replaceState(null, '', hash);
+    else history.pushState({ from: location.hash || '#/' }, '', hash);
+  }
+  route();
+}
+
+// A back arrow steps back through history when the previous entry is the screen it names, so Back and the arrow agree.
+// Otherwise it replaces this entry with that screen, so Back never returns to the screen just left.
+function goBack(hash) {
+  if (history.state && history.state.from === hash) history.back();
+  else navigate(hash, { replace: true });
+}
+
+// Draw the screen the URL names: #/plant/<id> is a specimen, #/gallery the gallery, anything else home.
+// It never pushes, so Back and Forward (popstate, hashchange) cannot loop.
+function route() {
+  const m = /^#\/plant\/(.+)$/.exec(location.hash);
+  if (m && Store.get(m[1])) {
+    go('detail', m[1]);
+    return;
+  }
+  if (m) {
+    // An unknown id replaces its own entry, so Back does not return to it.
+    history.replaceState(null, '', '#/gallery');
+    showToast('That specimen is gone.');
+  }
+  go(location.hash === '#/gallery' ? 'gallery' : 'home');
+}
+
+function openDetail(id) {
+  navigate(`#/plant/${id}`);
+}
+
+function renderBadges(record, analysis) {
+  const box = $('dtBadges');
+  box.textContent = '';
+  const tier = document.createElement('span');
+  tier.className = `tier-chip tier-${analysis.tier.id}`;
+  tier.textContent = analysis.tier.label;
+  box.append(tier);
+  if (isHybrid(record)) {
+    const badge = document.createElement('span');
+    badge.className = 'badge hybrid';
+    badge.textContent = 'Hybrid';
+    box.append(badge);
+  }
+  if (record.gen > 0) {
+    const gen = document.createElement('span');
+    gen.className = 'gen';
+    gen.textContent = `Gen ${record.gen}`;
+    box.append(gen);
+  }
+}
+
+// Lineage: the parents' names and thumbnails, from the snapshots kept on the hybrid. Mutations are listed beneath.
+function renderLineage(record) {
+  const line = $('dtLineage');
+  const parents = $('dtParents');
+  const mutation = $('dtMutation');
+  parents.textContent = '';
+  line.hidden = !record.parents;
+  parents.hidden = !record.parents;
+  mutation.hidden = !(record.mutations && record.mutations.length);
+  if (record.parents) {
+    line.textContent = `Generation ${record.gen} · bred from two parents`;
+    record.parents.forEach((parent, i) => {
+      const card = document.createElement('div');
+      card.className = 'parent';
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = renderThumb(parent);
+      const label = document.createElement('p');
+      label.className = 'parent-name';
+      label.textContent = `${i === 0 ? 'Parent A' : 'Parent B'} · ${parent.name}`;
+      card.append(img, label);
+      parents.append(card);
+    });
+  }
+  if (!mutation.hidden) {
+    mutation.textContent = `Mutation: ${record.mutations
+      .map((m) => `${GENES[m.gene].label} → ${GENES[m.gene].alleles[m.allele].name}`)
+      .join(', ')}`;
+  }
+}
+
+function renderTraitList(record, analysis) {
+  const list = $('dtTraits');
+  list.textContent = '';
+  const items = detail.showAll ? analysis.notable : analysis.notable.slice(0, 8);
+  for (const { gene, allele } of items) {
+    const li = document.createElement('li');
+    li.className = 'trait';
+    const left = document.createElement('div');
+    const name = document.createElement('span');
+    name.className = 'trait-name';
+    name.textContent = allele.name;
+    const geneLabel = document.createElement('span');
+    geneLabel.className = 'trait-gene';
+    geneLabel.textContent = record.origin ? `${gene.label} · ${ORIGIN_LABELS[record.origin[gene.i]]}` : gene.label;
+    left.append(name, geneLabel);
+    const pct = document.createElement('span');
+    pct.className = `trait-pct r-${rarityClass(allele.p)}`;
+    pct.textContent = formatPct(allele.p * 100);
+    li.append(left, pct);
+    list.append(li);
+  }
+  const more = $('dtShowAll');
+  more.hidden = analysis.notable.length <= 8;
+  more.textContent = detail.showAll ? 'Show fewer traits' : `Show all ${analysis.notable.length} traits`;
+}
+
+// The full genome: every gene in its group, with the allele and its percentage.
+function renderGenome(record) {
+  const box = $('dtGenome');
+  box.textContent = '';
+  for (const group of GENE_GROUPS) {
+    const heading = document.createElement('h4');
+    heading.textContent = group.label;
+    const list = document.createElement('ul');
+    for (const gene of GENES.filter((g) => g.group === group.id)) {
+      const allele = gene.alleles[record.genes[gene.i]];
+      const item = document.createElement('li');
+      item.textContent = `${gene.label}: ${allele.name} · ${formatPct(allele.p * 100)}`;
+      list.append(item);
+    }
+    box.append(heading, list);
+  }
+}
+
+function setFavoriteButton(record) {
+  const b = $('dtFavorite');
+  b.textContent = record.fav ? '★ Favorited' : '☆ Favorite';
+  b.setAttribute('aria-pressed', String(record.fav));
+}
+
+function renderDetail(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  detail = { id, showAll: false };
+  const analysis = analysisOf(record);
+  $('dtName').textContent = record.name;
+  renderBadges(record, analysis);
+  const chip = $('dtTier');
+  chip.textContent = analysis.tier.label;
+  chip.className = `tier-chip tier-${analysis.tier.id}`;
+  $('dtScore').textContent = `Rarity ${analysis.score.toFixed(1)} / 100`;
+  $('dtPctl').textContent = `Rarer than ${analysis.score.toFixed(1)}% of plants`;
+  const meter = $('dtMeter');
+  meter.style.width = '0%';
+  requestAnimationFrame(() => {
+    meter.style.width = `${analysis.score.toFixed(1)}%`;
+  });
+  renderLineage(record);
+  renderTraitList(record, analysis);
+  renderGenome(record);
+  setFavoriteButton(record);
+  detailView.resize();
+  detailView.setPlant(record, { animate: true, growDuration: 1.2 });
+  detailView.start();
+}
+
+function initDetail() {
+  $('dtFavorite').addEventListener('click', () => {
+    const record = Store.get(detail.id);
+    if (!record) return;
+    Store.update(record.id, { fav: !record.fav });
+    buzz([6]);
+    setFavoriteButton(Store.get(record.id));
+  });
+  $('dtRename').addEventListener('click', async () => {
+    const id = detail.id;
+    await renameSpecimen(id);
+    const record = Store.get(id);
+    if (record && detail.id === id) $('dtName').textContent = record.name;
+  });
+  $('dtShowAll').addEventListener('click', () => {
+    const record = Store.get(detail.id);
+    if (!record) return;
+    detail.showAll = !detail.showAll;
+    renderTraitList(record, analysisOf(record));
+  });
+  $('dtUse').addEventListener('click', () => {
+    breedState.parents = [detail.id];
+    openGallery({ breed: true });
+  });
+  $('dtDelete').addEventListener('click', async () => {
+    const id = detail.id;
+    if (await deleteSpecimen(id)) navigate('#/gallery', { replace: true });
+  });
+}
+
 function init() {
   homeView = new PlantView($('homeCanvas'), {});
   revealView = new PlantView($('rvCanvas'), {});
@@ -3176,15 +3453,23 @@ function init() {
     generateFlow();
   });
   $('rvClose').addEventListener('click', closeReveal);
+  // Forward buttons push their screen; back arrows (data-back) step back through history.
   document.querySelectorAll('[data-nav]').forEach((el) => {
-    el.addEventListener('click', () => go(el.dataset.nav));
+    const hash = el.dataset.nav === 'gallery' ? '#/gallery' : '#/';
+    el.addEventListener('click', () => (el.hasAttribute('data-back') ? goBack(hash) : navigate(hash)));
   });
   window.addEventListener('resize', () => {
     if (screenEls.home.classList.contains('active')) homeView.resize();
+    if (screenEls.detail.classList.contains('active')) detailView.resize();
     if (reveal) revealView.resize();
   });
   initGallery();
-  go('home');
+  initDetail();
+  detailView = new PlantView($('dtCanvas'), {});
+  // Back and Forward fire popstate, and a fragment change also fires hashchange. Both draw the same URL.
+  window.addEventListener('popstate', route);
+  window.addEventListener('hashchange', route);
+  route();
 }
 
 EG.newPlant = newPlant;
@@ -3200,6 +3485,8 @@ EG.promptText = promptText;
 EG.confirmDialog = confirmDialog;
 EG.galleryState = galleryState;
 EG.breedState = breedState;
+EG.openDetail = openDetail;
+EG.route = route;
 
 init();
 
