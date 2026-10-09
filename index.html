@@ -233,6 +233,111 @@ EG.GENE_GROUPS = GENE_GROUPS;
 EG.GENE_COUNT = GENE_COUNT;
 EG.GENES = GENES;
 
+/* ---------- Seeded randomness and hashing ---------- */
+// mulberry32: small and fast. Each call returns a number in [0, 1).
+function rngFrom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// FNV-1a, 32-bit. Seeds the layout and the name from a genome.
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/* ---------- Sampling, rarity, and tiers ---------- */
+// Draw one allele per gene, each by its weight.
+function sampleGenome(rng) {
+  return GENES.map((gene) => {
+    const r = rng();
+    let acc = 0;
+    for (const allele of gene.alleles) {
+      acc += allele.p;
+      if (r < acc) return allele.i;
+    }
+    return gene.alleles[gene.alleles.length - 1].i;
+  });
+}
+
+// Tier thresholds on the 0 to 100 rarity score (spec section 5).
+const TIERS = Object.freeze([
+  Object.freeze({ id: 'common', label: 'Common', min: 0 }),
+  Object.freeze({ id: 'uncommon', label: 'Uncommon', min: 60 }),
+  Object.freeze({ id: 'rare', label: 'Rare', min: 85 }),
+  Object.freeze({ id: 'epic', label: 'Epic', min: 95 }),
+  Object.freeze({ id: 'legendary', label: 'Legendary', min: 99 }),
+  Object.freeze({ id: 'mythic', label: 'Mythic', min: 99.7 }),
+]);
+
+// Count of sorted values <= x (binary search for the upper bound).
+function countAtMost(sorted, x) {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid] <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+// Calibration population: 10,000 random genomes from a fixed seed, sorted once at load.
+const CAL = (() => {
+  const rng = rngFrom(0x5eed);
+  const bits = new Float64Array(10000);
+  for (let k = 0; k < bits.length; k++) {
+    const genes = sampleGenome(rng);
+    let total = 0;
+    for (let i = 0; i < GENE_COUNT; i++) total += GENES[i].alleles[genes[i]].bits;
+    bits[k] = total;
+  }
+  return bits.sort();
+})();
+
+// Analyze a genome: alleles, surprisal in bits, score and tier, seed, and notable traits (p < 0.12).
+function analyze(genes) {
+  if (!Array.isArray(genes) || genes.length !== GENE_COUNT) throw new Error(`analyze expects ${GENE_COUNT} allele indices`);
+  const alleles = GENES.map((gene, i) => {
+    const allele = gene.alleles[genes[i]];
+    if (!allele) throw new Error(`gene ${gene.key} has no allele ${genes[i]}`);
+    return allele;
+  });
+  const bits = alleles.reduce((sum, a) => sum + a.bits, 0);
+  const score = (100 * countAtMost(CAL, bits)) / CAL.length;
+  const tier = TIERS.reduce((best, t) => (score >= t.min ? t : best), TIERS[0]);
+  const notable = [];
+  GENES.forEach((gene, i) => {
+    if (alleles[i].p < 0.12) notable.push({ gene, allele: alleles[i] });
+  });
+  notable.sort((x, y) => x.allele.w - y.allele.w);
+  return {
+    alleles,
+    bits,
+    score,
+    tier: { id: tier.id, label: tier.label },
+    seed: fnv1a(genes.join(',')),
+    notable,
+  };
+}
+
+EG.rngFrom = rngFrom;
+EG.fnv1a = fnv1a;
+EG.sampleGenome = sampleGenome;
+EG.analyze = analyze;
+EG.TIERS = TIERS;
+EG.CAL = CAL;
+
 /* @@js:genetics */
 
 /* ===== Naming ===== */
