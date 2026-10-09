@@ -499,6 +499,302 @@ EG.hybridName = hybridName;
 /* @@js:naming */
 
 /* ===== Layout ===== */
+/* ---------- Visual values per allele (read by Layout and Renderer) ---------- */
+// Keyed by gene key, then allele name. Numbers are scales or counts. Strings are shape, color, or effect ids.
+const VISUALS = {
+  trunkThickness: { 'Slender': 0.55, 'Sturdy': 0.8, 'Thick': 1, 'Stout': 1.2, 'Massive Trunk': 1.5 },
+  trunkHeight: { 'Stunted': 0.36, 'Low': 0.5, 'Medium': 0.66, 'Tall': 0.8, 'Towering': 0.92, 'Skyward': 1.04 },
+  barkTexture: { 'Smooth': 'smooth', 'Furrowed': 'furrow', 'Scaled': 'scale', 'Papery': 'paper', 'Mossy': 'moss', 'Gnarled': 'gnarl' },
+  trunkColor: { 'Umber': '#6e4b2f', 'Ash Grey': '#8d8c87', 'Silver': '#bcc4c8', 'Mahogany': '#7b3b26', 'Ivory': '#e8dcc4', 'Obsidian': '#2e2c34', 'Moonstone': '#aebfdc', 'Sun-Gilded': '#cfa450' },
+  branching: {
+    'Single Stem': { k: [1, 2], d: 3, s: 0.18, l: 0.78, tw: 0 },
+    'Forked': { k: [2, 2], d: 4, s: 0.5, l: 0.74, tw: 0 },
+    'Open Crown': { k: [2, 3], d: 4, s: 0.85, l: 0.72, tw: 0 },
+    'Dense Branching': { k: [3, 3], d: 4, s: 0.7, l: 0.7, tw: 0 },
+    'Candelabra': { k: [3, 4], d: 3, s: 1, l: 0.66, tw: 0 },
+    'Spiral Branching': { k: [2, 3], d: 5, s: 0.6, l: 0.7, tw: 0.35 },
+  },
+  aerialRoots: { 'None': 0, 'Few': 3, 'Dangling': 6, 'Cascading': 11 },
+  buttressRoots: { 'None': 0, 'Low Buttress': 1, 'Great Buttress': 2, 'Cathedral Roots': 3 },
+  trunkCount: { 'Single': 1, 'Twin': 2, 'Triple': 3, 'Clustered': 5 },
+  trunkTwist: { 'Straight': 0, 'Gentle Curve': 0.22, 'Twisted': 0.5, 'Corkscrew': 0.85, 'Ancient Spiral': 1.25 },
+  leafShape: { 'Oval': 'oval', 'Heart': 'heart', 'Lanceolate': 'lance', 'Palmate': 'palm', 'Round': 'round', 'Feathery': 'feather', 'Star-Lobed': 'star', 'Ginkgo Fan': 'fan' },
+  leafSize: { 'Tiny': 0.5, 'Small': 0.7, 'Medium': 1, 'Large': 1.35, 'Enormous': 1.8 },
+  foliageDensity: { 'Sparse': 0.45, 'Airy': 0.7, 'Lush': 1, 'Dense': 1.3, 'Impenetrable': 1.6 },
+  leafPalette: {
+    'Verdant': ['#2f7d43', '#8fd18a'], 'Sage': ['#64845c', '#b7cfa4'], 'Jade': ['#23765f', '#7fd3b5'],
+    'Olive': ['#5f6e2a', '#b3bf62'], 'Emerald': ['#11683f', '#4fc184'], 'Teal': ['#1b6470', '#5fbfc6'],
+    'Plum': ['#4d2452', '#b06fb0'], 'Crimson': ['#7d1d2c', '#e0606c'], 'Amber': ['#a8621a', '#f2b35a'],
+    'Silver-Blue': ['#4f6f8f', '#c2dcef'], 'Violet': ['#4b3d92', '#a79af0'],
+  },
+  seasonalShift: { 'Evergreen': 'evergreen', 'Autumn Blush': 'blush', 'Dawn Gradient': 'dawn', 'Frostbitten': 'frost', 'Blossom Cycle': 'blossom', 'Golden Leaves': 'gold' },
+  leafArrangement: { 'Alternate': 'alt', 'Opposite': 'opp', 'Whorled': 'whorl', 'Rosette': 'rosette', 'Spiraled': 'spiral', 'Clustered': 'tight' },
+  foliageType: { 'Broadleaf': 'broad', 'Needle': 'needle', 'Scale': 'scale', 'Fern Frond': 'frond', 'Ribbon': 'ribbon', 'Glass Needle': 'glass' },
+  crownPattern: { 'Clumped': 'clump', 'Even Spread': 'even', 'Tiered Leaves': 'tier', 'Wispy': 'wisp', 'Tufted': 'tuft', 'Veiled': 'veil' },
+  leafEdge: { 'Smooth': 'smooth', 'Serrated': 'serrated', 'Lobed': 'lobed', 'Frilled': 'frilled', 'Spiked Edge': 'spiked', 'Lace': 'lace' },
+  flowerPresence: { 'None': 0, 'Sparse': 0.18, 'Common': 0.4, 'Profuse': 0.7, 'Overwhelming': 0.95 },
+  flowerSize: { 'Tiny': 0.55, 'Small': 0.75, 'Medium': 1, 'Large': 1.3, 'Giant Blossom': 1.75 },
+  petalCount: { '3': 3, '5': 5, '8': 8, '12': 12, '20': 20, '40': 40, 'Fractal': 60 },
+  flowerColor: {
+    'White': ['#f8f4ea', '#ffffff'], 'Pink': ['#ec8aa6', '#ffc4d4'], 'Lilac': ['#a98bd8', '#dcc8ff'],
+    'Yellow': ['#eec13f', '#fff2a0'], 'Coral': ['#ef7f5f', '#ffc1a6'], 'Red': ['#c8353f', '#ff8a8a'],
+    'Blue': ['#4a76cc', '#a2c8ff'], 'Indigo': ['#343a95', '#8288e6'], 'Silver': ['#bcc8d4', '#f4f8fb'],
+    'Black Velvet': ['#241529', '#6a3d74'], 'Opal': ['#e6d2ff', '#c4f5ea'], 'Rainbow': 'rainbow',
+  },
+  bloomStyle: { 'Open Cup': 'cup', 'Bell': 'bell', 'Star': 'star', 'Tubular': 'tube', 'Spiral Bloom': 'spiral', 'Cluster Spray': 'spray' },
+  fragrance: { 'Faint': 0, 'Sweet': 1, 'Spiced': 2, 'Heady': 3, 'Resinous': 4, 'Mystic': 5 },
+  bioluminescentFlowers: { 'None': 0, 'Bioluminescent': 1 },
+  fruitType: { 'None': 'none', 'Berries': 'berry', 'Pods': 'pod', 'Drupes': 'drupe', 'Orbs': 'orb', 'Nuts': 'nut', 'Starfruit': 'star', 'Lanterns': 'lantern' },
+  fruitColor: { 'Scarlet': '#d4463d', 'Gold': '#e6b53e', 'Violet': '#7b4eb2', 'Cream': '#f2e7c9', 'Blue-black': '#25324a', 'Pearl': '#e9eff3', 'Ruby': '#a0163b', 'Ember Glow': '#ff7b2f', 'Jade': '#3ea67b' },
+  fruitSize: { 'Tiny': 0.55, 'Small': 0.78, 'Medium': 1, 'Large': 1.3, 'Huge': 1.7 },
+  fruitCount: { 'Single': 1, 'Handful': 3, 'Bunches': 6, 'Abundant': 10, 'Bountiful': 16 },
+  fruitArrangement: { 'Scattered': 'scatter', 'Hanging': 'hang', 'Crowned': 'crown', 'Garland': 'garland', 'Spiral': 'spiral', 'Constellation': 'const' },
+  silhouette: {
+    'Upright': { up: 0.25, dr: 0, sp: 0.7 }, 'Weeping': { up: 0, dr: 0.45, sp: 0.9 },
+    'Sprawling': { up: -0.05, dr: 0.05, sp: 1.25 }, 'Columnar': { up: 0.5, dr: 0, sp: 0.35 },
+    'Umbrella': { up: -0.15, dr: 0.1, sp: 1.15, flat: true }, 'Bonsai': { up: 0, dr: 0.15, sp: 0.8, lenK: 0.6 },
+    'Cloud-Dome': { up: 0, dr: 0, sp: 1, dome: true }, 'Spiral Spire': { up: 0.3, dr: 0, sp: 0.55, tw: 0.5 },
+    'Hanging Tiers': { up: -0.05, dr: 0.35, sp: 1 },
+  },
+  lean: { 'Straight': { a: 0, zig: false }, 'Leaning': { a: 0.2, zig: false }, 'Heavy Lean': { a: 0.42, zig: false }, 'Zigzag': { a: 0.6, zig: true } },
+  symmetry: { 'Symmetrical': 0, 'Asymmetrical': 0.45, 'Chaotic': 0.9 },
+  canopyTiers: { 'Single Layer': 1, 'Two Tiers': 2, 'Three Tiers': 3, 'Pagoda': 4, 'Floating Tiers': 5 },
+  glowAura: { 'None': null, 'Faint Halo': '#f5e9b8', 'Ember Glow': '#ff9a4a', 'Moonlight Aura': '#9cc8ff' },
+  crystalline: { 'None': 0, 'Crystal Tips': 1, 'Crystal Veins': 2, 'Fully Crystalline': 3 },
+  floating: { 'Grounded': 0, 'Hovering Roots': 0.05, 'Levitating': 0.1, 'Ethereal Float': 0.16 },
+  ethereal: { 'Solid': 1, 'Misty': 0.85, 'Phantom': 0.7, 'Spectral': 0.55 },
+  ancient: { 'Young': 0, 'Mature': 1, 'Aged': 2, 'Ancient': 3, 'Primordial': 4 },
+  symbiosis: { 'None': 'none', 'Vine-Covered': 'vine', 'Mushroom Caps': 'mush', 'Mushroom Symbiont': 'mushsym', 'Lichen Crown': 'lichen' },
+  thorns: { 'None': 0, 'Few Thorns': 6, 'Thorny': 14, 'Spiny': 26, 'Razor Thorns': 40 },
+  particleEffect: { 'None': null, 'Pollen': 'pollen', 'Falling Petals': 'petals', 'Glowing Spores': 'spores', 'Light Rays': 'rays', 'Fireflies': 'fire', 'Starlight Motes': 'stars' },
+  barkPattern: { 'Plain': 'plain', 'Spotted': 'spot', 'Striped': 'stripe', 'Runic': 'rune', 'Eye Knots': 'eye', 'Marbled': 'marble', 'Veined Glow': 'vein' },
+  leafGradient: { 'Mono': 'mono', 'Two-tone': 'two', 'Radial': 'radial', 'Iridescent': 'irid', 'Aurora': 'aurora' },
+  mossCover: { 'Bare': 'bare', 'Patchy Moss': 'patchy', 'Lush Moss': 'lush', 'Lichen Shelves': 'lichen', 'Velvet Moss': 'velvet', 'Glowing Moss': 'glow' },
+};
+
+// Traits of a genome, keyed by gene key: allele name, probability, and visual value.
+function traitsOf(genes) {
+  const out = {};
+  GENES.forEach((gene, i) => {
+    const allele = gene.alleles[genes[i]];
+    const v = VISUALS[gene.key][allele.name];
+    if (v === undefined) throw new Error(`no visual for ${gene.key} / ${allele.name}`);
+    out[gene.key] = { name: allele.name, p: allele.p, v };
+  });
+  return out;
+}
+
+/* ---------- Layout: deterministic plant structure from the genome seed ---------- */
+const NODE_BUDGET = 240;
+const TAU = Math.PI * 2;
+const MARK_COUNTS = { smooth: 0, furrow: 9, scale: 5, paper: 4, moss: 4, gnarl: 3 };
+const PATTERN_COUNTS = { plain: 0, spot: 3, stripe: 4, rune: 2, eye: 1, marble: 3, vein: 3 };
+const MOSS_COUNTS = { bare: 0, patchy: 3, lush: 6, lichen: 4, velvet: 5, glow: 4 };
+const MOSS_KIND = { patchy: 'moss', lush: 'moss', lichen: 'lichen', velvet: 'velvetmoss', glow: 'glowmoss' };
+const CRYSTAL_CHANCE = [0, 0.4, 0.2, 1];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Blend two hex colors into an rgb() string. t = 0 gives hexA, t = 1 gives hexB.
+function mixColor(hexA, hexB, t) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
+}
+
+// Tree of nodes from the base at (0, 0). y grows downward, so a plant reaches negative y.
+// Node and cluster geometry is at rest; the renderer applies sway and growth per frame.
+function buildLayout(genes, seed) {
+  const T = traitsOf(genes);
+  const rng = rngFrom(seed);
+  const L = {
+    nodes: [], clusters: [], trunkChain: [], marks: [], thorns: [], aerial: [],
+    buttress: [], mushrooms: [], vine: null, hover: T.floating.v, bounds: null,
+  };
+  const trunkHex = T.trunkColor.v;
+  const leafHex = T.leafPalette.v[0];
+  const canAdd = () => L.nodes.length < NODE_BUDGET;
+
+  function addNode(parent, depth, x, y, angle, length, w0, w1, birth) {
+    L.nodes.push({
+      parent, depth, x, y, angle, length, w0, w1,
+      ex: x + Math.cos(angle) * length,
+      ey: y + Math.sin(angle) * length,
+      phase: rng() * TAU,
+      freq: 0.6 + 0.6 * rng(),
+      sway: depth === 0 ? 0.008 : 0.02 + 0.025 * Math.min(depth, 5) / 5,
+      birth,
+      color: mixColor(trunkHex, leafHex, depth === 0 ? 0 : Math.min(0.6, 0.12 * depth)),
+    });
+    return L.nodes.length - 1;
+  }
+
+  // Silhouette: 'up' lifts children and 'dr' droops them. Flat and dome shapes stretch or narrow the crown.
+  function bendToSilhouette(angle) {
+    const sil = T.silhouette.v;
+    let vx = Math.cos(angle);
+    const vy = Math.sin(angle) + sil.dr * 0.9 - sil.up * 0.9;
+    if (sil.flat) vx *= 1.25;
+    if (sil.dome) vx *= 0.8;
+    return Math.atan2(vy, vx);
+  }
+
+  // Leaf cluster on node i. 'along' is the position on the node (1 is the tip). offX and offY offset it in the node frame.
+  function addCluster(i, along, offX, offY, angle) {
+    let leaves = Math.round((4 + 5 * T.foliageDensity.v) * (0.8 + 0.4 * rng()));
+    if (T.foliageType.v === 'needle' || T.foliageType.v === 'scale') leaves = Math.round(leaves * 1.6);
+    if (T.crownPattern.v === 'wisp') leaves = Math.max(3, Math.round(leaves * 0.7));
+    const radius = 0.075 * T.leafSize.v * (1.5 + 0.35 * Math.sqrt(leaves));
+    const flowers = rng() < T.flowerPresence.v ? 1 + Math.floor(rng() * 3) : 0;
+    const fruit = (T.fruitType.v !== 'none' && rng() < 0.55)
+      ? Math.min(12, Math.round(T.fruitCount.v * (0.4 + 0.9 * rng())))
+      : 0;
+    const crystalChance = CRYSTAL_CHANCE[T.crystalline.v];
+    L.clusters.push({
+      node: i, along, offX, offY, angle, radius, leaves, flowers, fruit,
+      seed: Math.floor(rng() * 4294967296),
+      birth: Math.min(0.95, L.nodes[i].birth + 0.25 + 0.2 * rng()),
+      crystal: crystalChance > 0 && rng() < crystalChance,
+    });
+  }
+
+  // Tip: one to three clusters, scaled by density. The crown pattern sets their spread.
+  function addTip(i) {
+    const spread = { wisp: 0.09, even: 0.05 }[T.crownPattern.v] || 0.025;
+    const count = Math.max(1, Math.min(3, Math.round(T.foliageDensity.v * (1 + 1.2 * rng()))));
+    for (let c = 0; c < count; c++) {
+      const offX = (rng() - 0.3) * spread * 0.6;
+      const offY = (rng() - 0.5) * spread + (T.crownPattern.v === 'veil' ? spread * 0.8 : 0);
+      const angle = T.crownPattern.v === 'tuft' ? (rng() - 0.5) * 0.8 : rng() * TAU;
+      addCluster(i, 1, offX, offY, angle);
+    }
+  }
+
+  // Branch: a tapered segment, then children until the depth limit, the length limit, or the node budget.
+  // The caller checks canAdd() before calling.
+  function grow(parent, x, y, angle, length, width, depth) {
+    const i = addNode(parent, depth, x, y, angle, length, width, width * 0.7, Math.min(0.6, 0.1 * depth + 0.08 * rng()));
+    const nd = L.nodes[i];
+    const br = T.branching.v;
+    if (depth >= br.d || length < 0.03) {
+      addTip(i);
+      return;
+    }
+    if (depth >= 2 && rng() < 0.3 * T.foliageDensity.v) addCluster(i, 0.55 + 0.25 * rng(), 0, 0, rng() * TAU);
+    const k = br.k[0] + Math.floor(rng() * (br.k[1] - br.k[0] + 1));
+    const sil = T.silhouette.v;
+    const spread = br.s * sil.sp;
+    for (let c = 0; c < k && canAdd(); c++) {
+      const u = k === 1 ? 0 : (2 * c) / (k - 1) - 1;
+      const sway = (c % 2 ? 1 : -1) * (br.tw * 0.5 + (sil.tw || 0) * 0.25);
+      const jitter = (rng() - 0.5) * 0.25 * (0.5 + T.symmetry.v);
+      const childAngle = bendToSilhouette(nd.angle + u * spread + sway + jitter);
+      const childLength = nd.length * br.l * (0.85 + 0.3 * rng()) * (sil.lenK || 1);
+      grow(i, nd.ex, nd.ey, childAngle, childLength, nd.w1 * 0.78, depth + 1);
+    }
+  }
+
+  // Trunk: four chained segments. Twist bends each segment, zigzag alternates, and whorls add laterals by canopy tier.
+  function growTrunk(x0, y0, angle0, length, width, side) {
+    const lean = T.lean.v;
+    const tiers = T.canopyTiers.v;
+    const segLength = length / 4;
+    let x = x0;
+    let y = y0;
+    let angle = angle0;
+    let w = width;
+    let prev = -1;
+    for (let s = 0; s < 4 && canAdd(); s++) {
+      if (s > 0) {
+        angle += side * T.trunkTwist.v * 0.16 + (lean.zig ? (s % 2 ? 1 : -1) * lean.a * 0.5 : 0) + (rng() - 0.5) * 0.05;
+      }
+      const i = addNode(prev, 0, x, y, angle, segLength * (0.92 + 0.16 * rng()), w, w * 0.9, 0.05 * s);
+      L.trunkChain.push(i);
+      x = L.nodes[i].ex;
+      y = L.nodes[i].ey;
+      w *= 0.9;
+      prev = i;
+      if (s >= 1 && s <= Math.min(3, tiers - 1)) {
+        for (const sign of [-1, 1]) {
+          if (!canAdd()) break;
+          const spreadAngle = (0.7 + 0.3 * rng()) * (tiers === 4 ? 1.1 : 1);
+          grow(i, x, y, angle + sign * spreadAngle, segLength * 0.9, w * 0.7, 1);
+        }
+      }
+    }
+    if (prev >= 0 && canAdd()) grow(prev, x, y, angle, segLength, w, 1);
+  }
+
+  const trunkLength = 0.22 + 0.5 * T.trunkHeight.v;
+  const baseWidth = 0.055 * T.trunkThickness.v;
+  for (let k = 0; k < T.trunkCount.v && canAdd(); k++) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const x0 = (k - (T.trunkCount.v - 1) / 2) * 0.075 * (1 + 0.3 * rng());
+    const angle0 = -Math.PI / 2 + side * T.lean.v.a * (0.6 + 0.4 * rng()) + (k ? (rng() - 0.5) * 0.25 : 0);
+    growTrunk(x0, 0, angle0, trunkLength * (k ? 0.85 : 1), baseWidth * (k ? 0.7 : 1), side);
+  }
+
+  // Features are placed on nodes after the tree is final. Each pool is chosen from node depth.
+  const scatter = (pool, count, make) => {
+    for (let m = 0; m < count && pool.length; m++) make(pool[Math.floor(rng() * pool.length)]);
+  };
+  const chain = L.trunkChain;
+  const branchNodes = [];
+  const deepNodes = [];
+  L.nodes.forEach((nd, i) => {
+    if (nd.depth >= 1) branchNodes.push(i);
+    if (nd.depth >= 2) deepNodes.push(i);
+  });
+  const markAt = (pool, kind, count) => scatter(pool, count, (n) => {
+    L.marks.push({ n, t: 0.08 + 0.84 * rng(), o: (rng() * 2 - 1) * 0.8, size: 0.6 + 0.6 * rng(), kind });
+  });
+  markAt(chain, T.barkTexture.v, MARK_COUNTS[T.barkTexture.v]);
+  markAt(chain, T.barkPattern.v, PATTERN_COUNTS[T.barkPattern.v]);
+  markAt(chain, MOSS_KIND[T.mossCover.v] || 'none', MOSS_COUNTS[T.mossCover.v]);
+  if (T.symbiosis.v === 'lichen') markAt(deepNodes, 'lichen', 4);
+  scatter(branchNodes, T.thorns.v, (n) => {
+    L.thorns.push({ n, t: 0.1 + 0.8 * rng(), side: rng() < 0.5 ? -1 : 1, size: 0.6 + 0.8 * rng() });
+  });
+  scatter(branchNodes.filter((i) => L.nodes[i].depth <= 2), T.aerialRoots.v, (n) => {
+    L.aerial.push({ n, t: 0.2 + 0.7 * rng(), len: 0.07 + 0.12 * rng(), bend: (rng() - 0.5) * 0.05, phase: rng() * TAU });
+  });
+  for (let b = 0; b < T.buttressRoots.v; b++) {
+    L.buttress.push({ side: b % 2 ? 1 : -1, length: 0.05 + 0.04 * rng(), width: 0.03 + 0.02 * rng() });
+  }
+  const shrooms = { mush: 4, mushsym: 6 }[T.symbiosis.v] || 0;
+  scatter(chain, shrooms, (n) => {
+    L.mushrooms.push({ n, t: 0.05 + 0.5 * rng(), side: rng() < 0.5 ? -1 : 1, size: 0.6 + 0.8 * rng() });
+  });
+  if (T.symbiosis.v === 'vine') L.vine = { chain: chain.slice(), strands: 2 + Math.floor(rng() * 2), phase: rng() * TAU };
+
+  // Bounds at rest. Cluster offsets are approximate, without the node rotation.
+  let minX = 0;
+  let maxX = 0;
+  let top = 0;
+  for (const nd of L.nodes) {
+    minX = Math.min(minX, nd.x, nd.ex);
+    maxX = Math.max(maxX, nd.x, nd.ex);
+    top = Math.min(top, nd.y, nd.ey);
+  }
+  for (const c of L.clusters) {
+    const nd = L.nodes[c.node];
+    const px = nd.x + (nd.ex - nd.x) * c.along + c.offX;
+    const py = nd.y + (nd.ey - nd.y) * c.along + c.offY;
+    minX = Math.min(minX, px - c.radius);
+    maxX = Math.max(maxX, px + c.radius);
+    top = Math.min(top, py - c.radius);
+  }
+  L.bounds = { minX, maxX, top };
+  return L;
+}
+
+EG.VISUALS = VISUALS;
+EG.traitsOf = traitsOf;
+EG.buildLayout = buildLayout;
+
 /* @@js:layout */
 
 /* ===== Renderer ===== */
