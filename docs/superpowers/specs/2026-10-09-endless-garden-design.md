@@ -55,7 +55,7 @@ Derived at runtime, never persisted: alleles, bits, score, tier, seed, layout, s
 
 ## 5. Genetics
 
-**Catalogue.** 45 genes in 7 groups: Trunk 9, Foliage 9, Flowers 7, Fruit and seed 5, Form 4, Special 6, Unique 5. Each gene has 2 to 8 alleles. Allele weights are percentages that sum to 100 per gene (normalized at load). The request's examples are included with their stated weights: Massive Trunk 3%, Golden Leaves 1.8%, Bioluminescent 0.7%.
+**Catalogue.** 45 genes in 7 groups: Trunk 9, Foliage 9, Flowers 7, Fruit and seed 5, Form 4, Special 6, Unique 5. Each gene has 2 to 12 alleles, as listed in Appendix A. Allele weights are percentages that sum to 100 per gene (normalized at load). The request's examples are included with their stated weights: Massive Trunk 3%, Golden Leaves 1.8%, Bioluminescent 0.7%.
 
 **Sampling.** Each gene is sampled independently by weight.
 

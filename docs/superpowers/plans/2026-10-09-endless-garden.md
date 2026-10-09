@@ -65,7 +65,7 @@
 **Interfaces:**
 - Produces: `GENES`, an array of 45 `{i, key, label, group, alleles}`. Each allele is `{i, name, w, p, bits}`, where `w` is the weight from Appendix A, `p = w / sum(w)` within its gene, and `bits = -log2(p)`. `GENE_GROUPS`, an ordered list of `{id, label, count}`. `GENE_COUNT = 45`. Visual values are not stored here; the renderer looks them up by gene key and allele name (Task 7).
 
-- [ ] **Step 1: Write the failing check.** `EG.GENES.length === 45`. Group counts are `{trunk:9, foliage:9, flower:7, fruit:5, form:4, special:6, unique:5}`. Every gene has 2–8 alleles and `|sum(p) - 1| < 1e-9`. The allele `Massive Trunk` has `w === 3`, `Golden Leaves` has `w === 1.8`, and `Bioluminescent` has `w === 0.7`.
+- [ ] **Step 1: Write the failing check.** `EG.GENES.length === 45`. Group counts are `{trunk:9, foliage:9, flower:7, fruit:5, form:4, special:6, unique:5}`. Every gene has 2–12 alleles and `|sum(p) - 1| < 1e-9`. The allele `Massive Trunk` has `w === 3`, `Golden Leaves` has `w === 1.8`, and `Bioluminescent` has `w === 0.7`.
 - [ ] **Step 2: Run it and expect FAIL.**
 - [ ] **Step 3: Implement the catalogue.** Transcribe Appendix A into compact data of the form `[key, label, group, [[name, w], ...]]`. Derive `i`, `p`, and `bits` at load. Assign `EG.GENES`, `EG.GENE_GROUPS`, and `EG.GENE_COUNT`.
 - [ ] **Step 4: Run it and expect PASS.**

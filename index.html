@@ -150,6 +150,89 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 const EG = (window.EndlessGarden = window.EndlessGarden || {});
 
 /* ===== Genetics ===== */
+/* ---------- Gene catalogue (spec Appendix A) ---------- */
+// Weights are relative percentages. GENES normalizes them per gene into probabilities p.
+const GENE_GROUPS = Object.freeze([
+  Object.freeze({ id: 'trunk', label: 'Trunk', count: 9 }),
+  Object.freeze({ id: 'foliage', label: 'Foliage', count: 9 }),
+  Object.freeze({ id: 'flower', label: 'Flowers', count: 7 }),
+  Object.freeze({ id: 'fruit', label: 'Fruit and seed', count: 5 }),
+  Object.freeze({ id: 'form', label: 'Form', count: 4 }),
+  Object.freeze({ id: 'special', label: 'Special', count: 6 }),
+  Object.freeze({ id: 'unique', label: 'Unique', count: 5 }),
+]);
+const GENE_COUNT = 45;
+
+// [key, label, group id, [[allele name, weight], ...]]
+const GENE_DATA = [
+  ['trunkThickness', 'Trunk thickness', 'trunk', [['Slender', 25], ['Sturdy', 35], ['Thick', 25], ['Stout', 12], ['Massive Trunk', 3]]],
+  ['trunkHeight', 'Trunk height', 'trunk', [['Stunted', 10], ['Low', 20], ['Medium', 35], ['Tall', 25], ['Towering', 8], ['Skyward', 2]]],
+  ['barkTexture', 'Bark texture', 'trunk', [['Smooth', 20], ['Furrowed', 30], ['Scaled', 15], ['Papery', 15], ['Mossy', 12], ['Gnarled', 8]]],
+  ['trunkColor', 'Bark color', 'trunk', [['Umber', 30], ['Ash Grey', 20], ['Silver', 12], ['Mahogany', 18], ['Ivory', 8], ['Obsidian', 7], ['Moonstone', 3], ['Sun-Gilded', 2]]],
+  ['branching', 'Branching', 'trunk', [['Single Stem', 8], ['Forked', 30], ['Open Crown', 25], ['Dense Branching', 20], ['Candelabra', 10], ['Spiral Branching', 7]]],
+  ['aerialRoots', 'Aerial roots', 'trunk', [['None', 60], ['Few', 25], ['Dangling', 10], ['Cascading', 5]]],
+  ['buttressRoots', 'Buttress roots', 'trunk', [['None', 55], ['Low Buttress', 30], ['Great Buttress', 12], ['Cathedral Roots', 3]]],
+  ['trunkCount', 'Trunk count', 'trunk', [['Single', 70], ['Twin', 20], ['Triple', 8], ['Clustered', 2]]],
+  ['trunkTwist', 'Trunk shape', 'trunk', [['Straight', 50], ['Gentle Curve', 28], ['Twisted', 15], ['Corkscrew', 5], ['Ancient Spiral', 2]]],
+
+  ['leafShape', 'Leaf shape', 'foliage', [['Oval', 22], ['Heart', 18], ['Lanceolate', 16], ['Palmate', 12], ['Round', 14], ['Feathery', 10], ['Star-Lobed', 6], ['Ginkgo Fan', 2]]],
+  ['leafSize', 'Leaf size', 'foliage', [['Tiny', 15], ['Small', 25], ['Medium', 30], ['Large', 20], ['Enormous', 10]]],
+  ['foliageDensity', 'Foliage density', 'foliage', [['Sparse', 15], ['Airy', 25], ['Lush', 35], ['Dense', 18], ['Impenetrable', 7]]],
+  ['leafPalette', 'Leaf palette', 'foliage', [['Verdant', 25], ['Sage', 18], ['Jade', 14], ['Olive', 12], ['Emerald', 10], ['Teal', 8], ['Plum', 4], ['Crimson', 3], ['Amber', 3], ['Silver-Blue', 2], ['Violet', 1]]],
+  ['seasonalShift', 'Seasonal shift', 'foliage', [['Evergreen', 40], ['Autumn Blush', 25], ['Dawn Gradient', 15], ['Frostbitten', 11.5], ['Blossom Cycle', 6.7], ['Golden Leaves', 1.8]]],
+  ['leafArrangement', 'Leaf arrangement', 'foliage', [['Alternate', 35], ['Opposite', 25], ['Whorled', 15], ['Rosette', 12], ['Spiraled', 9], ['Clustered', 4]]],
+  ['foliageType', 'Foliage type', 'foliage', [['Broadleaf', 50], ['Needle', 25], ['Scale', 10], ['Fern Frond', 10], ['Ribbon', 4], ['Glass Needle', 1]]],
+  ['crownPattern', 'Crown pattern', 'foliage', [['Clumped', 25], ['Even Spread', 25], ['Tiered Leaves', 15], ['Wispy', 15], ['Tufted', 10], ['Veiled', 10]]],
+  ['leafEdge', 'Leaf edge', 'foliage', [['Smooth', 40], ['Serrated', 25], ['Lobed', 15], ['Frilled', 10], ['Spiked Edge', 7], ['Lace', 3]]],
+
+  ['flowerPresence', 'Flowering', 'flower', [['None', 30], ['Sparse', 25], ['Common', 25], ['Profuse', 15], ['Overwhelming', 5]]],
+  ['flowerSize', 'Flower size', 'flower', [['Tiny', 30], ['Small', 30], ['Medium', 25], ['Large', 12], ['Giant Blossom', 3]]],
+  ['petalCount', 'Petal count', 'flower', [['3', 15], ['5', 35], ['8', 20], ['12', 15], ['20', 8], ['40', 5], ['Fractal', 2]]],
+  ['flowerColor', 'Flower color', 'flower', [['White', 18], ['Pink', 18], ['Lilac', 12], ['Yellow', 14], ['Coral', 10], ['Red', 8], ['Blue', 8], ['Indigo', 4], ['Silver', 3], ['Black Velvet', 2], ['Opal', 2], ['Rainbow', 1]]],
+  ['bloomStyle', 'Bloom style', 'flower', [['Open Cup', 30], ['Bell', 20], ['Star', 20], ['Tubular', 12], ['Spiral Bloom', 9], ['Cluster Spray', 9]]],
+  ['fragrance', 'Fragrance', 'flower', [['Faint', 35], ['Sweet', 25], ['Spiced', 15], ['Heady', 12], ['Resinous', 8], ['Mystic', 5]]],
+  ['bioluminescentFlowers', 'Bioluminescent flowers', 'flower', [['None', 99.3], ['Bioluminescent', 0.7]]],
+
+  ['fruitType', 'Fruit type', 'fruit', [['None', 30], ['Berries', 20], ['Pods', 12], ['Drupes', 10], ['Orbs', 10], ['Nuts', 8], ['Starfruit', 6], ['Lanterns', 4]]],
+  ['fruitColor', 'Fruit color', 'fruit', [['Scarlet', 22], ['Gold', 18], ['Violet', 14], ['Cream', 12], ['Blue-black', 12], ['Pearl', 8], ['Ruby', 6], ['Ember Glow', 4], ['Jade', 4]]],
+  ['fruitSize', 'Fruit size', 'fruit', [['Tiny', 35], ['Small', 30], ['Medium', 20], ['Large', 12], ['Huge', 3]]],
+  ['fruitCount', 'Fruit count', 'fruit', [['Single', 25], ['Handful', 30], ['Bunches', 25], ['Abundant', 15], ['Bountiful', 5]]],
+  ['fruitArrangement', 'Fruit arrangement', 'fruit', [['Scattered', 30], ['Hanging', 25], ['Crowned', 15], ['Garland', 15], ['Spiral', 10], ['Constellation', 5]]],
+
+  ['silhouette', 'Silhouette', 'form', [['Upright', 20], ['Weeping', 14], ['Sprawling', 14], ['Columnar', 12], ['Umbrella', 12], ['Bonsai', 10], ['Cloud-Dome', 9], ['Spiral Spire', 5], ['Hanging Tiers', 4]]],
+  ['lean', 'Lean', 'form', [['Straight', 60], ['Leaning', 25], ['Heavy Lean', 10], ['Zigzag', 5]]],
+  ['symmetry', 'Symmetry', 'form', [['Symmetrical', 55], ['Asymmetrical', 35], ['Chaotic', 10]]],
+  ['canopyTiers', 'Canopy tiers', 'form', [['Single Layer', 45], ['Two Tiers', 30], ['Three Tiers', 15], ['Pagoda', 8], ['Floating Tiers', 2]]],
+
+  ['glowAura', 'Aura', 'special', [['None', 90], ['Faint Halo', 6], ['Ember Glow', 2.5], ['Moonlight Aura', 1.5]]],
+  ['crystalline', 'Crystalline', 'special', [['None', 93], ['Crystal Tips', 5], ['Crystal Veins', 1.8], ['Fully Crystalline', 0.2]]],
+  ['floating', 'Floating', 'special', [['Grounded', 96], ['Hovering Roots', 2.5], ['Levitating', 1.2], ['Ethereal Float', 0.3]]],
+  ['ethereal', 'Ethereal', 'special', [['Solid', 93], ['Misty', 5], ['Phantom', 1.8], ['Spectral', 0.2]]],
+  ['ancient', 'Age', 'special', [['Young', 60], ['Mature', 25], ['Aged', 10], ['Ancient', 4], ['Primordial', 1]]],
+  ['symbiosis', 'Symbiosis', 'special', [['None', 80], ['Vine-Covered', 10], ['Mushroom Caps', 6], ['Mushroom Symbiont', 3], ['Lichen Crown', 1]]],
+
+  ['thorns', 'Thorns', 'unique', [['None', 62], ['Few Thorns', 18], ['Thorny', 12], ['Spiny', 6], ['Razor Thorns', 2]]],
+  ['particleEffect', 'Particles', 'unique', [['None', 70], ['Pollen', 12], ['Falling Petals', 8], ['Glowing Spores', 5], ['Light Rays', 3], ['Fireflies', 1.5], ['Starlight Motes', 0.5]]],
+  ['barkPattern', 'Bark pattern', 'unique', [['Plain', 35], ['Spotted', 20], ['Striped', 15], ['Runic', 10], ['Eye Knots', 6], ['Marbled', 9], ['Veined Glow', 5]]],
+  ['leafGradient', 'Leaf gradient', 'unique', [['Mono', 45], ['Two-tone', 30], ['Radial', 15], ['Iridescent', 8], ['Aurora', 2]]],
+  ['mossCover', 'Moss cover', 'unique', [['Bare', 45], ['Patchy Moss', 25], ['Lush Moss', 15], ['Lichen Shelves', 8], ['Velvet Moss', 5], ['Glowing Moss', 2]]],
+];
+
+// Derive per-allele probability p = w / sum(w) within the gene, and bits = -log2(p).
+const GENES = Object.freeze(GENE_DATA.map(([key, label, group, rows], i) => {
+  const total = rows.reduce((sum, row) => sum + row[1], 0);
+  const alleles = rows.map(([name, w], j) => {
+    const p = w / total;
+    return Object.freeze({ i: j, name, w, p, bits: -Math.log2(p) });
+  });
+  return Object.freeze({ i, key, label, group, alleles: Object.freeze(alleles) });
+}));
+if (GENES.length !== GENE_COUNT) throw new Error(`gene catalogue has ${GENES.length} genes, expected ${GENE_COUNT}`);
+
+EG.GENE_GROUPS = GENE_GROUPS;
+EG.GENE_COUNT = GENE_COUNT;
+EG.GENES = GENES;
+
 /* @@js:genetics */
 
 /* ===== Naming ===== */
