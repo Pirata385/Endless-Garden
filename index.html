@@ -199,6 +199,88 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .reveal-actions button { flex: 1; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* ---------- Gallery ---------- */
+.gallery-tools { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.search-input {
+  flex: 1; min-width: 0; min-height: 44px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 15px;
+}
+.search-input::placeholder { color: var(--ink-3); }
+.sort-select {
+  min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--glass); color: var(--ink); font: inherit; font-size: 14px;
+}
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink-2); font: inherit; font-size: 14px;
+}
+.chip[aria-pressed="true"] { background: rgba(233, 201, 119, 0.2); color: var(--ink); border-color: rgba(233, 201, 119, 0.5); }
+.gallery-sub { margin: 4px 0 6px; font-size: 13px; color: var(--ink-3); }
+.grid {
+  flex: 1; min-height: 0; overflow-y: auto; align-content: start; display: grid; grid-auto-rows: max-content;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+  padding: 4px 2px calc(var(--safe-b) + 24px);
+}
+.grid-sentinel { grid-column: 1 / -1; height: 1px; }
+.card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden; border-radius: 18px;
+  background: var(--card); border: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;
+}
+.card .thumb { aspect-ratio: 1; background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.08), rgba(0, 0, 0, 0) 70%); }
+.card .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.card-body { padding: 8px 44px 10px 10px; min-width: 0; }
+.card-name {
+  margin: 0; font-family: var(--serif); font-size: 15px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+.card-meta .tier-chip { min-height: 22px; padding: 0 8px; font-size: 10px; }
+.badge.hybrid {
+  padding: 3px 8px; border-radius: 999px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  background: linear-gradient(90deg, rgba(127, 211, 181, 0.25), rgba(233, 201, 119, 0.3)); color: var(--ink);
+}
+.gen { font-size: 11px; color: var(--ink-3); }
+.fav, .more {
+  position: absolute; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(7, 24, 18, 0.72); color: var(--ink-2); font-size: 18px;
+}
+.fav { top: 4px; right: 4px; }
+.fav.on { color: var(--gold); }
+.more { right: 2px; bottom: 2px; }
+.gallery-empty { margin: auto; padding: 24px; display: grid; gap: 14px; justify-items: center; text-align: center; color: var(--ink-2); }
+
+/* Bottom sheet */
+.overlay.sheet { align-items: flex-end; justify-content: stretch; }
+.sheet-card {
+  width: 100%; max-width: 520px; margin: 0 auto; padding: 14px 16px calc(var(--safe-b) + 16px);
+  border-radius: 22px 22px 0 0; background: var(--bg1); border-top: 1px solid var(--line);
+  display: grid; gap: 8px; animation: rise 0.3s ease both;
+}
+.sheet-title { margin: 0 0 4px; text-align: center; font-family: var(--serif); font-size: 18px; }
+.sheet-action {
+  min-height: 52px; border-radius: 14px; background: var(--card); border: 1px solid var(--line);
+  font: inherit; font-size: 16px;
+}
+.sheet-action.danger { color: #ff9b9b; }
+.sheet-action:disabled { opacity: 0.5; }
+
+/* Dialogs: prompt and confirm */
+.dialog-card {
+  width: min(88vw, 360px); padding: 20px; border-radius: 22px; background: var(--bg1);
+  border: 1px solid var(--line); display: grid; gap: 14px; animation: rise 0.3s ease both;
+}
+.dialog-card h3 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 20px; }
+.dialog-card input {
+  min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); font: inherit; font-size: 16px;
+}
+.dialog-text { margin: 0; color: var(--ink-2); font-size: 14px; }
+.dialog-actions { display: flex; gap: 10px; }
+.dialog-actions button { flex: 1; }
+.btn-danger { min-height: 48px; padding: 0 18px; border-radius: 999px; background: #c9574e; color: #fff; font-weight: 600; }
+
 /* @@css:components */
 </style>
 </head>
@@ -233,7 +315,21 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
       <button class="icon-btn" type="button" data-nav="home" aria-label="Back to home">&#8249;</button>
       <div class="brand-block"><h2 class="title">Gallery</h2></div>
     </header>
-    <!-- @@html:gallery -->
+    <div class="gallery-tools">
+      <input type="search" id="gSearch" class="search-input" placeholder="Search names or traits" aria-label="Search specimens" autocomplete="off">
+      <select id="gSort" class="sort-select" aria-label="Sort specimens">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="rarest">Rarest</option>
+        <option value="common">Most common</option>
+        <option value="name">Name A–Z</option>
+        <option value="generation">Generation</option>
+      </select>
+    </div>
+    <div class="chips" id="gFilters" role="group" aria-label="Filter specimens"></div>
+    <p class="gallery-sub" id="gSub"></p>
+    <div class="grid" id="gGrid"></div>
+    <div class="gallery-empty" id="gEmpty" hidden></div>
   </section>
 
   <section id="screen-detail" class="screen" aria-label="Specimen details">
@@ -2326,6 +2422,7 @@ function go(name) {
   } else {
     homeView.stop();
   }
+  if (name === 'gallery') renderGallery();
 }
 
 function renderHome() {
@@ -2596,6 +2693,479 @@ async function generateFlow() {
   }
 }
 
+/* ---------- Gallery: grid, search, filters, sorting, and card actions ---------- */
+const galleryState = { query: '', filter: 'all', sort: 'newest', pageSize: 48, shown: 48, breed: false };
+// Breed mode keeps up to two parent ids. Task 13 builds the selection and the dock on this.
+const breedState = { parents: [] };
+const analysisCache = new Map();
+const thumbQueue = [];
+let thumbFrame = 0;
+let longPressTimer = 0;
+let longPressFired = false;
+let cardObserver = null;
+let pageObserver = null;
+
+const FILTERS = [
+  ['all', 'All'],
+  ['fav', '★ Favorites'],
+  ['hybrid', 'Hybrids'],
+  ['pure', 'Pure'],
+  ...TIER_IDS.map((id) => [id, id[0].toUpperCase() + id.slice(1)]),
+];
+
+const SORTS = {
+  newest: (a, b) => b.createdAt - a.createdAt,
+  oldest: (a, b) => a.createdAt - b.createdAt,
+  rarest: (a, b) => analysisOf(b).score - analysisOf(a).score,
+  common: (a, b) => analysisOf(a).score - analysisOf(b).score,
+  name: (a, b) => a.name.localeCompare(b.name),
+  generation: (a, b) => b.gen - a.gen || b.createdAt - a.createdAt,
+};
+
+// Analysis depends only on the genes, so each record is analyzed once.
+function analysisOf(record) {
+  let analysis = analysisCache.get(record.id);
+  if (!analysis) {
+    analysis = analyze(record.genes);
+    analysisCache.set(record.id, analysis);
+  }
+  return analysis;
+}
+
+function isHybrid(record) {
+  return record.gen > 0 || Boolean(record.parents);
+}
+
+function matchesFilter(record, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'fav') return record.fav;
+  if (filter === 'hybrid') return isHybrid(record);
+  if (filter === 'pure') return !isHybrid(record);
+  return analysisOf(record).tier.id === filter;
+}
+
+function matchesQuery(record, q) {
+  if (record.name.toLowerCase().includes(q)) return true;
+  return analysisOf(record).notable.some((n) => n.allele.name.toLowerCase().includes(q));
+}
+
+// What the gallery shows: filtered, searched, and sorted. Store order is newest first.
+function visibleList() {
+  const q = galleryState.query.trim().toLowerCase();
+  return Store.all()
+    .filter((r) => matchesFilter(r, galleryState.filter) && (!q || matchesQuery(r, q)))
+    .sort(SORTS[galleryState.sort] || SORTS.newest);
+}
+
+function debounce(fn, ms) {
+  let timer = 0;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+function renderFilters() {
+  const box = $('gFilters');
+  box.textContent = '';
+  for (const [id, label] of FILTERS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', String(galleryState.filter === id));
+    b.addEventListener('click', () => {
+      galleryState.filter = id;
+      renderGallery();
+    });
+    box.append(b);
+  }
+}
+
+// Gallery screen from the first page: header counts, filter chips, then the grid.
+function renderGallery() {
+  galleryState.shown = galleryState.pageSize;
+  refreshGallery();
+}
+
+// Header and grid, keeping how many cards are loaded so far.
+function refreshGallery() {
+  const all = Store.all();
+  const hybrids = all.filter(isHybrid).length;
+  const favorites = all.filter((r) => r.fav).length;
+  $('gSub').textContent = `${plural(all.length, 'specimen')} · ${plural(hybrids, 'hybrid')} · ${plural(favorites, 'favorite')}`;
+  $('gSort').value = galleryState.sort;
+  renderFilters();
+  paintGrid();
+}
+
+// Rebuilds the loaded cards and keeps the scroll position.
+function paintGrid() {
+  const grid = $('gGrid');
+  const list = visibleList();
+  const top = grid.scrollTop;
+  cardObserver.disconnect();
+  pageObserver.disconnect();
+  grid.textContent = '';
+  for (const record of list.slice(0, galleryState.shown)) {
+    const card = cardFor(record);
+    grid.append(card);
+    cardObserver.observe(card);
+  }
+  if (list.length > galleryState.shown) {
+    const sentinel = document.createElement('div');
+    sentinel.className = 'grid-sentinel';
+    grid.append(sentinel);
+    pageObserver.observe(sentinel);
+  }
+  grid.scrollTop = top;
+  renderEmpty(list.length);
+}
+
+function renderEmpty(count) {
+  const box = $('gEmpty');
+  box.textContent = '';
+  box.hidden = count > 0;
+  if (count > 0) return;
+  const text = document.createElement('p');
+  if (Store.all().length === 0) {
+    text.textContent = 'No specimens yet. Your gallery fills as you save plants.';
+    const button = makeButton('Generate a plant', 'btn-primary', 'gGenerate');
+    button.addEventListener('click', () => go('home'));
+    box.append(text, button);
+  } else {
+    text.textContent = 'Nothing matches these filters.';
+    box.append(text);
+  }
+}
+
+function cardFor(record) {
+  const analysis = analysisOf(record);
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.id = record.id;
+  const thumb = document.createElement('div');
+  thumb.className = 'thumb';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.decoding = 'async';
+  thumb.append(img);
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  const name = document.createElement('p');
+  name.className = 'card-name';
+  name.textContent = record.name;
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
+  const chip = document.createElement('span');
+  chip.className = `tier-chip tier-${analysis.tier.id}`;
+  chip.textContent = analysis.tier.label;
+  meta.append(chip);
+  if (isHybrid(record)) {
+    const badge = document.createElement('span');
+    badge.className = 'badge hybrid';
+    badge.textContent = 'Hybrid';
+    meta.append(badge);
+  }
+  if (record.gen > 0) {
+    const gen = document.createElement('span');
+    gen.className = 'gen';
+    gen.textContent = `Gen ${record.gen}`;
+    meta.append(gen);
+  }
+  body.append(name, meta);
+  const fav = document.createElement('button');
+  fav.type = 'button';
+  fav.className = `fav${record.fav ? ' on' : ''}`;
+  fav.textContent = record.fav ? '★' : '☆';
+  fav.setAttribute('aria-label', record.fav ? `Remove ${record.name} from favorites` : `Add ${record.name} to favorites`);
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'more';
+  more.textContent = '⋯';
+  more.setAttribute('aria-label', `More actions for ${record.name}`);
+  card.append(thumb, body, fav, more);
+
+  fav.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFavorite(record.id);
+  });
+  more.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openActions(record.id);
+  });
+  card.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    longPressFired = false;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      longPressFired = true;
+      openActions(record.id);
+    }, 500);
+  });
+  const cancelPress = () => clearTimeout(longPressTimer);
+  card.addEventListener('pointerup', cancelPress);
+  card.addEventListener('pointerleave', cancelPress);
+  card.addEventListener('pointercancel', cancelPress);
+  card.addEventListener('click', (e) => {
+    if (longPressFired) {
+      longPressFired = false;
+      return;
+    }
+    if (e.target.closest('button')) return;
+    onCardTap(record.id);
+  });
+  return card;
+}
+
+// Thumbnails render lazily: a card asks once, when it first scrolls into view. Two per frame.
+function onCardsVisible(entries) {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    cardObserver.unobserve(entry.target);
+    const img = entry.target.querySelector('img');
+    const record = Store.get(entry.target.dataset.id);
+    if (img && record && !img.src) thumbQueue.push({ img, record });
+  }
+  scheduleThumbs();
+}
+
+function scheduleThumbs() {
+  if (thumbFrame) return;
+  thumbFrame = requestAnimationFrame(() => {
+    thumbFrame = 0;
+    for (let k = 0; k < 2 && thumbQueue.length; k++) {
+      const { img, record } = thumbQueue.shift();
+      img.src = renderThumb(record);
+    }
+    if (thumbQueue.length) scheduleThumbs();
+  });
+}
+
+// Infinite scroll: when the sentinel comes into view, the next page of cards is added.
+function onSentinel(entries) {
+  if (!entries.some((e) => e.isIntersecting)) return;
+  if (galleryState.shown >= visibleList().length) return;
+  galleryState.shown += galleryState.pageSize;
+  paintGrid();
+}
+
+function onCardTap(id) {
+  openActions(id);
+}
+
+function toggleFavorite(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  Store.update(id, { fav: !record.fav });
+  buzz([6]);
+  refreshGallery();
+}
+
+function makeButton(label, className, id, type = 'button') {
+  const b = document.createElement('button');
+  b.type = type;
+  b.className = className;
+  b.id = id;
+  b.textContent = label;
+  return b;
+}
+
+// Bottom sheet with actions for one specimen. A tap disables the sheet, then runs the action after it closes.
+function closeSheet() {
+  const sheet = $('sheet');
+  sheet.hidden = true;
+  sheet.textContent = '';
+}
+
+function openSheet(record, actions) {
+  const sheet = $('sheet');
+  sheet.textContent = '';
+  const card = document.createElement('div');
+  card.className = 'sheet-card';
+  const title = document.createElement('p');
+  title.className = 'sheet-title';
+  title.textContent = record.name;
+  card.append(title);
+  const buttons = actions.map((action) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `sheet-action${action.danger ? ' danger' : ''}`;
+    b.dataset.action = action.id;
+    b.textContent = action.label;
+    b.addEventListener('click', () => {
+      if (buttons.some((x) => x.disabled)) return;
+      buttons.forEach((x) => {
+        x.disabled = true;
+      });
+      setTimeout(() => {
+        closeSheet();
+        action.run();
+      }, 120);
+    });
+    card.append(b);
+    return b;
+  });
+  sheet.append(card);
+  sheet.hidden = false;
+}
+
+function openActions(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  openSheet(record, [
+    { id: 'rename', label: 'Rename', run: () => renameSpecimen(id) },
+    { id: 'favorite', label: record.fav ? 'Remove from favorites' : 'Add to favorites', run: () => toggleFavorite(id) },
+    { id: 'delete', label: 'Delete', danger: true, run: () => deleteSpecimen(id) },
+  ]);
+}
+
+// Dialog host. The first answer wins: buttons disable at once, and the dialog hides after a short delay,
+// so a double tap cannot reach the page underneath.
+function openDialog(card, onAnswer) {
+  const box = $('dialog');
+  box.textContent = '';
+  box.append(card);
+  box.hidden = false;
+  let answered = false;
+  const onKey = (e) => {
+    if (e.key === 'Escape') answer(null);
+  };
+  const answer = (value) => {
+    if (answered) return;
+    answered = true;
+    card.querySelectorAll('button').forEach((b) => {
+      b.disabled = true;
+    });
+    setTimeout(() => {
+      box.hidden = true;
+      box.textContent = '';
+      box.removeEventListener('keydown', onKey);
+      onAnswer(value);
+    }, 200);
+  };
+  box.addEventListener('keydown', onKey);
+  return answer;
+}
+
+// Rename prompt. Resolves with the typed text, or null when cancelled.
+function promptText({ title, value = '', max = 40 }) {
+  return new Promise((resolve) => {
+    const heading = document.createElement('h3');
+    heading.id = 'dialog-title';
+    heading.textContent = title;
+    const input = document.createElement('input');
+    input.id = 'dlgInput';
+    input.type = 'text';
+    input.maxLength = max;
+    input.value = value;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-labelledby', 'dialog-title');
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancel = makeButton('Cancel', 'btn-secondary', 'dlgCancel');
+    const ok = makeButton('Save', 'btn-primary', 'dlgOk', 'submit');
+    actions.append(cancel, ok);
+    const form = document.createElement('form');
+    form.className = 'dialog-card';
+    form.append(heading, input, actions);
+    const answer = openDialog(form, (text) => resolve(text));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      answer(input.value);
+    });
+    cancel.addEventListener('click', () => answer(null));
+    input.focus();
+    input.select();
+  });
+}
+
+// Confirm prompt. Resolves true only when the confirm button is chosen.
+function confirmDialog({ title, message, confirmLabel = 'Confirm' }) {
+  return new Promise((resolve) => {
+    const heading = document.createElement('h3');
+    heading.id = 'dialog-title';
+    heading.textContent = title;
+    const text = document.createElement('p');
+    text.className = 'dialog-text';
+    text.textContent = message;
+    const cancel = makeButton('Cancel', 'btn-secondary', 'dlgCancel');
+    const ok = makeButton(confirmLabel, 'btn-danger', 'dlgOk');
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    actions.append(cancel, ok);
+    const card = document.createElement('div');
+    card.className = 'dialog-card';
+    card.append(heading, text, actions);
+    const answer = openDialog(card, (yes) => resolve(yes === true));
+    cancel.addEventListener('click', () => answer(false));
+    ok.addEventListener('click', () => answer(true));
+    cancel.focus();
+  });
+}
+
+async function renameSpecimen(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  const text = await promptText({ title: 'Rename specimen', value: record.name, max: 40 });
+  if (text === null) return;
+  const next = text.trim().slice(0, 40);
+  if (!next || !Store.get(id)) return; // an empty name keeps the old one
+  Store.update(id, { name: next });
+  refreshGallery();
+  showToast('Renamed');
+}
+
+async function deleteSpecimen(id) {
+  const record = Store.get(id);
+  if (!record) return;
+  const ok = await confirmDialog({
+    title: 'Delete this specimen?',
+    message: `${record.name} will leave your gallery. This cannot be undone.`,
+    confirmLabel: 'Delete',
+  });
+  if (!ok || !Store.get(id)) return;
+  Store.remove(id);
+  analysisCache.delete(id);
+  buzz([18, 30, 18]);
+  refreshGallery();
+  showToast(`${record.name} was deleted`);
+}
+
+// Breed mode and the detail view both open from here. The gallery opens with its filters and sort kept.
+function openGallery(opts = {}) {
+  galleryState.breed = Boolean(opts.breed);
+  go('gallery');
+}
+
+function initGallery() {
+  cardObserver = new IntersectionObserver(onCardsVisible, { root: $('gGrid'), rootMargin: '240px' });
+  pageObserver = new IntersectionObserver(onSentinel, { root: $('gGrid'), rootMargin: '200px' });
+  $('gSearch').addEventListener(
+    'input',
+    debounce(() => {
+      galleryState.query = $('gSearch').value;
+      galleryState.shown = galleryState.pageSize;
+      paintGrid();
+    }, 120),
+  );
+  $('gSort').addEventListener('change', () => {
+    galleryState.sort = $('gSort').value;
+    galleryState.shown = galleryState.pageSize;
+    paintGrid();
+  });
+  $('sheet').addEventListener('click', (e) => {
+    if (e.target === $('sheet')) closeSheet();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('sheet').hidden) closeSheet();
+  });
+}
+
 function init() {
   homeView = new PlantView($('homeCanvas'), {});
   revealView = new PlantView($('rvCanvas'), {});
@@ -2613,6 +3183,7 @@ function init() {
     if (screenEls.home.classList.contains('active')) homeView.resize();
     if (reveal) revealView.resize();
   });
+  initGallery();
   go('home');
 }
 
@@ -2622,6 +3193,13 @@ EG.openReveal = openReveal;
 EG.closeReveal = closeReveal;
 EG.buzz = buzz;
 EG.go = go;
+EG.openGallery = openGallery;
+EG.visibleList = visibleList;
+EG.openSheet = openSheet;
+EG.promptText = promptText;
+EG.confirmDialog = confirmDialog;
+EG.galleryState = galleryState;
+EG.breedState = breedState;
 
 init();
 
