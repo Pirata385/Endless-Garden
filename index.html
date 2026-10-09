@@ -98,7 +98,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 /* ---------- Home ---------- */
 .home-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
 .specimen {
-  position: relative; width: min(80vw, 44vh, 380px); aspect-ratio: 1; border-radius: 28px; overflow: hidden;
+  position: relative; width: min(80vw, 44vh, 380px); aspect-ratio: 1; border-radius: 28px; overflow: hidden; cursor: pointer;
   background: radial-gradient(circle at 50% 42%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%), rgba(255, 255, 255, 0.025);
   border: 1px solid var(--line); box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35);
 }
@@ -332,9 +332,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 /* ---------- Breed mode: selected cards, the dock, and the hybrid reveal ---------- */
 .card.selected { box-shadow: 0 0 0 2px var(--gold); }
 .slot-mark {
-  position: absolute; left: 6px; top: 6px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--gold); color: #1a1408; font-size: 13px; font-weight: 700; pointer-events: none;
+  position: absolute; left: 6px; top: 6px; height: 28px; padding: 0 9px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--gold); color: #1a1408; font-size: 13px; font-weight: 700; white-space: nowrap; pointer-events: none;
 }
+#gBreed { margin-left: auto; }
 .breed-dock {
   flex: 0 0 auto; display: grid; gap: 10px; padding: 12px; border-radius: 22px;
   background: rgba(7, 24, 18, 0.92); border: 1px solid var(--line);
@@ -394,11 +395,11 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .breed-dock { width: min(100%, 460px); margin: 0 auto; }
 }
 
-/* @@css:components */
 </style>
 </head>
 <body>
 <noscript><p class="noscript">Endless Garden needs JavaScript to grow.</p></noscript>
+<p class="noscript" id="noCanvas" hidden>This browser cannot draw plants. Try a current version of Chrome, Safari, or Firefox.</p>
 <div id="app">
   <section id="screen-home" class="screen active" aria-label="Home">
     <header class="topbar">
@@ -430,6 +431,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
     <header class="topbar">
       <button class="icon-btn" type="button" data-nav="home" data-back aria-label="Back to home">&#8249;</button>
       <div class="brand-block"><h2 class="title" id="gTitle">Gallery</h2></div>
+      <button type="button" class="btn-ghost" id="gBreed" aria-pressed="false">Breed</button>
     </header>
     <div class="gallery-tools">
       <input type="search" id="gSearch" class="search-input" placeholder="Search names or traits" aria-label="Search specimens" autocomplete="off">
@@ -539,10 +541,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
     </div>
   </div>
   <div id="sheet" class="overlay sheet" hidden role="dialog" aria-modal="true" aria-label="Actions">
-    <!-- @@html:sheet -->
   </div>
   <div id="dialog" class="overlay dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-    <!-- @@html:dialog -->
   </div>
   <div id="settings" class="overlay settings" hidden role="dialog" aria-modal="true" aria-label="Settings">
     <div class="sheet-card">
@@ -873,7 +873,6 @@ EG.breed = breed;
 EG.forecast = forecast;
 EG.makeHybrid = makeHybrid;
 
-/* @@js:genetics */
 
 /* ===== Naming ===== */
 /* ---------- Procedural names (spec section 7) ---------- */
@@ -925,7 +924,6 @@ EG.LEGEND_EPITHETS = LEGEND_EPITHETS;
 EG.pureName = pureName;
 EG.hybridName = hybridName;
 
-/* @@js:naming */
 
 /* ===== Layout ===== */
 /* ---------- Visual values per allele (read by Layout and Renderer) ---------- */
@@ -1224,7 +1222,6 @@ EG.VISUALS = VISUALS;
 EG.traitsOf = traitsOf;
 EG.buildLayout = buildLayout;
 
-/* @@js:layout */
 
 /* ===== Renderer ===== */
 /* ---------- Renderer: cluster sprites, per-frame drawing, and PlantView ---------- */
@@ -2387,7 +2384,6 @@ function renderThumb(record) {
 EG.renderThumb = renderThumb;
 EG.thumbCache = THUMB_CACHE;
 
-/* @@js:renderer */
 
 /* ===== Loop ===== */
 /* ---------- Loop: one requestAnimationFrame loop for every active viewer ---------- */
@@ -2443,7 +2439,6 @@ const Loop = (() => {
 
 EG.Loop = Loop;
 
-/* @@js:loop */
 
 /* ===== Store ===== */
 /* ---------- Store: localStorage with validation and a memory fallback (spec section 10) ---------- */
@@ -2588,7 +2583,6 @@ Store.load();
 EG.Store = Store;
 EG.showToast = showToast;
 
-/* @@js:store */
 
 /* ===== UI ===== */
 /* ---------- UI: navigation, home, generate flow, lab, and reveal ---------- */
@@ -2851,6 +2845,8 @@ function openReveal(record, opts = {}) {
   revealView.resize();
   revealView.setPlant(record, { animate: true, growDuration: 1.8, ...auraOptions(record) });
   revealView.start();
+  if (TIER_IDS.indexOf(analysis.tier.id) >= TIER_IDS.indexOf('legendary')) revealView.burst();
+  $('rvSave').focus({ preventScroll: true });
   buzz(TIER_IDS.indexOf(analysis.tier.id) >= 3 ? [20, 40, 20] : [10]);
 }
 
@@ -3021,6 +3017,8 @@ function refreshGallery() {
   $('gSub').textContent = `${plural(all.length, 'specimen')} · ${plural(hybrids, 'hybrid')} · ${plural(favorites, 'favorite')}`;
   $('gSort').value = galleryState.sort;
   $('gTitle').textContent = galleryState.breed ? 'Hybridize' : 'Gallery';
+  $('gBreed').textContent = galleryState.breed ? 'Done' : 'Breed';
+  $('gBreed').setAttribute('aria-pressed', String(galleryState.breed));
   breedState.parents = breedState.parents.filter((id) => Store.get(id));
   renderFilters();
   paintGrid();
@@ -3216,8 +3214,15 @@ function paintSelection() {
       mark.setAttribute('aria-hidden', 'true');
       card.append(mark);
     }
-    mark.textContent = slot === 0 ? 'A' : 'B';
+    mark.textContent = slot === 0 ? 'A ✓' : 'B ✓';
   }
+}
+
+// The gallery header turns breed mode on and off without leaving the gallery.
+function toggleBreedMode() {
+  galleryState.breed = !galleryState.breed;
+  breedState.parents = [];
+  refreshGallery();
 }
 
 // The breed dock: both parents, the rarest traits they may pass on, the mutation note, and Hybridize, enabled at two.
@@ -3316,6 +3321,7 @@ function openSheet(record, actions) {
   });
   sheet.append(card);
   sheet.hidden = false;
+  if (buttons.length) buttons[0].focus();
 }
 
 function openActions(id) {
@@ -3469,10 +3475,34 @@ function initGallery() {
   $('sheet').addEventListener('click', (e) => {
     if (e.target === $('sheet')) closeSheet();
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('sheet').hidden) closeSheet();
-  });
 }
+
+// Keyboard for the open overlay on top: Escape closes it, and Tab stays inside it while it is open.
+const KEY_OVERLAYS = ['dialog', 'settings', 'sheet', 'overlay-reveal'];
+document.addEventListener('keydown', (e) => {
+  const top = KEY_OVERLAYS.map((id) => $(id)).find((el) => !el.hidden);
+  if (!top) return;
+  if (e.key === 'Escape') {
+    if (top.id === 'dialog') $('dlgCancel').click();
+    else if (top.id === 'settings') closeSettings();
+    else if (top.id === 'sheet') closeSheet();
+    else closeReveal();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const items = [...top.querySelectorAll('button:not([disabled]), input, select, textarea')].filter((el) => el.checkVisibility());
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const inside = top.contains(document.activeElement);
+  if (e.shiftKey && (!inside || document.activeElement === first)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (!inside || document.activeElement === last)) {
+    e.preventDefault();
+    first.focus();
+  }
+});
 
 /* ---------- Detail: one specimen in full, with lineage and actions ---------- */
 let detailView = null;
@@ -3804,6 +3834,7 @@ async function shareDetail() {
 function openSettings() {
   paintSettings();
   $('settings').hidden = false;
+  $('stHaptics').focus();
 }
 
 function closeSettings() {
@@ -3845,7 +3876,21 @@ async function resetGarden() {
   showToast('The garden is empty again');
 }
 
+// Plants are drawn with Canvas 2D. A browser without it gets a short message instead of a broken garden.
+function canDraw() {
+  try {
+    return Boolean(document.createElement('canvas').getContext('2d'));
+  } catch (err) {
+    return false;
+  }
+}
+
 function init() {
+  if (!canDraw()) {
+    $('app').hidden = true;
+    $('noCanvas').hidden = false;
+    return;
+  }
   homeView = new PlantView($('homeCanvas'), {});
   revealView = new PlantView($('rvCanvas'), {});
   $('btnGenerate').addEventListener('click', generateFlow);
@@ -3857,6 +3902,11 @@ function init() {
     else generateFlow();
   });
   $('btnGallery').addEventListener('click', () => openGallery());
+  $('specimen').addEventListener('click', () => {
+    const latest = Store.all()[0];
+    if (latest) openDetail(latest.id);
+  });
+  $('gBreed').addEventListener('click', toggleBreedMode);
   $('btnHybridize').addEventListener('click', () => openGallery({ breed: true }));
   $('breedGo').addEventListener('click', hybridize);
   $('rvClose').addEventListener('click', closeReveal);
@@ -3908,7 +3958,6 @@ EG.route = route;
 
 init();
 
-/* @@js:ui */
 </script>
 </body>
 </html>
