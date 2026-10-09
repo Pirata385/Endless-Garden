@@ -2008,6 +2008,142 @@ EG.Loop = Loop;
 /* @@js:loop */
 
 /* ===== Store ===== */
+/* ---------- Store: localStorage with validation and a memory fallback (spec section 10) ---------- */
+const STORE_KEY = 'endless-garden:v1';
+const STORE_VERSION = 1;
+const SAVE_FAILED_TEXT = 'Saving is unavailable. Your garden lasts for this session.';
+let toastTimer = 0;
+
+// Show a short message at the bottom of the screen. It hides after 3.2 seconds.
+function showToast(message) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 3200);
+}
+
+// Usable: a string id and name, a genus with string parts, and 45 allele indices, each in its gene's range.
+function isUsableRecord(r) {
+  if (!r || typeof r !== 'object') return false;
+  if (typeof r.id !== 'string' || r.id === '' || typeof r.name !== 'string') return false;
+  if (!r.genus || typeof r.genus.pre !== 'string' || typeof r.genus.suf !== 'string') return false;
+  if (!Array.isArray(r.genes) || r.genes.length !== GENE_COUNT) return false;
+  return r.genes.every((v, i) => Number.isInteger(v) && v >= 0 && v < GENES[i].alleles.length);
+}
+
+// Fill optional fields with defaults, so later code can rely on them.
+function normalizeRecord(r) {
+  return {
+    id: r.id,
+    name: r.name.trim().slice(0, 40) || 'Unnamed specimen',
+    genus: { pre: r.genus.pre, suf: r.genus.suf },
+    genes: r.genes.slice(),
+    createdAt: Number.isFinite(r.createdAt) ? r.createdAt : 0,
+    fav: r.fav === true,
+    gen: Number.isInteger(r.gen) && r.gen >= 0 ? r.gen : 0,
+    parents: Array.isArray(r.parents) && r.parents.length === 2 ? r.parents : null,
+    origin: Array.isArray(r.origin) && r.origin.length === GENE_COUNT ? r.origin : null,
+    mutations: Array.isArray(r.mutations) ? r.mutations : null,
+    mutationChance: typeof r.mutationChance === 'number' ? r.mutationChance : null,
+  };
+}
+
+const Store = {
+  plants: [], // newest first
+  settings: { haptics: true, particles: true },
+  memoryOnly: false,
+
+  load() {
+    let raw = null;
+    try {
+      raw = localStorage.getItem(STORE_KEY);
+    } catch (err) {
+      this.memoryOnly = true;
+      showToast(SAVE_FAILED_TEXT);
+      return;
+    }
+    if (!raw) return;
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch (err) {
+      showToast('Saved data could not be read, so the garden starts fresh.');
+      return;
+    }
+    if (!data || typeof data !== 'object') {
+      showToast('Saved data could not be read, so the garden starts fresh.');
+      return;
+    }
+    if (data.settings && typeof data.settings === 'object') {
+      this.settings.haptics = data.settings.haptics !== false;
+      this.settings.particles = data.settings.particles !== false;
+    }
+    const seen = new Set();
+    let dropped = 0;
+    for (const r of Array.isArray(data.plants) ? data.plants : []) {
+      if (isUsableRecord(r) && !seen.has(r.id)) {
+        seen.add(r.id);
+        this.plants.push(normalizeRecord(r));
+      } else {
+        dropped++;
+      }
+    }
+    if (dropped) showToast(`Skipped ${dropped} unreadable specimen${dropped === 1 ? '' : 's'}.`);
+  },
+
+  // Writes everything. On failure, the session continues from memory and the player is told once.
+  save() {
+    const payload = JSON.stringify({ version: STORE_VERSION, plants: this.plants, settings: this.settings });
+    try {
+      localStorage.setItem(STORE_KEY, payload);
+      this.memoryOnly = false;
+    } catch (err) {
+      if (!this.memoryOnly) showToast(SAVE_FAILED_TEXT);
+      this.memoryOnly = true;
+    }
+  },
+
+  all() {
+    return this.plants.slice();
+  },
+
+  get(id) {
+    return this.plants.find((p) => p.id === id) || null;
+  },
+
+  // Adding a record that is already stored changes nothing. That keeps double taps from duplicating a plant.
+  add(record) {
+    const existing = this.get(record.id);
+    if (existing) return existing;
+    this.plants.unshift(record);
+    this.save();
+    return record;
+  },
+
+  update(id, patch) {
+    const record = this.get(id);
+    if (!record) return null;
+    if (typeof patch.name === 'string') record.name = patch.name;
+    if (typeof patch.fav === 'boolean') record.fav = patch.fav;
+    this.save();
+    return record;
+  },
+
+  remove(id) {
+    const i = this.plants.findIndex((p) => p.id === id);
+    if (i < 0) return false;
+    this.plants.splice(i, 1);
+    this.save();
+    return true;
+  },
+};
+
+Store.load();
+EG.Store = Store;
+EG.showToast = showToast;
+
 /* @@js:store */
 
 /* ===== UI ===== */
