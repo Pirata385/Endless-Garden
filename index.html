@@ -338,6 +338,112 @@ EG.analyze = analyze;
 EG.TIERS = TIERS;
 EG.CAL = CAL;
 
+/* ---------- Breeding, mutation, and forecast (spec section 6) ---------- */
+// Record ids identify records only. They never affect gameplay.
+function newId() {
+  return `p${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
+}
+
+// Choose among alleles, favoring rare ones with weight 1 / sqrt(w).
+function pickRare(candidates, rng) {
+  let total = 0;
+  for (const a of candidates) total += 1 / Math.sqrt(a.w);
+  let r = rng() * total;
+  for (const a of candidates) {
+    r -= 1 / Math.sqrt(a.w);
+    if (r < 0) return a;
+  }
+  return candidates[candidates.length - 1];
+}
+
+// Offspring genome. Per gene: parents agree (origin 2), or the child takes A with pA in [0.40, 0.60], else B.
+// Then mutation: chance mu in [0.05, 0.12]; one hit (80%) or two (20%), each on one gene.
+function breed(genesA, genesB, rng) {
+  const genes = new Array(GENE_COUNT);
+  const origin = new Array(GENE_COUNT);
+  for (let i = 0; i < GENE_COUNT; i++) {
+    if (genesA[i] === genesB[i]) {
+      genes[i] = genesA[i];
+      origin[i] = 2;
+      continue;
+    }
+    const pA = 0.4 + 0.2 * rng();
+    const fromA = rng() < pA;
+    genes[i] = fromA ? genesA[i] : genesB[i];
+    origin[i] = fromA ? 0 : 1;
+  }
+  const mutationChance = 0.05 + 0.07 * rng();
+  const mutations = [];
+  if (rng() < mutationChance) {
+    const hits = rng() < 0.2 ? 2 : 1;
+    for (let h = 0; h < hits; h++) {
+      const g = Math.floor(rng() * GENE_COUNT);
+      if (mutations.some((m) => m.gene === g)) continue;
+      const gene = GENES[g];
+      let candidates = gene.alleles.filter((a) => a.i !== genesA[g] && a.i !== genesB[g]);
+      if (candidates.length === 0) candidates = gene.alleles.filter((a) => a.i !== genes[g]);
+      const chosen = pickRare(candidates, rng);
+      genes[g] = chosen.i;
+      origin[g] = 3;
+      mutations.push({ gene: g, allele: chosen.i });
+    }
+  }
+  return { genes, origin, mutations, mutationChance };
+}
+
+// Traits a child can inherit: shared alleles are certain; otherwise about 50% per parent.
+// Lists notable alleles (p < 0.12), rarest first.
+function forecast(genesA, genesB) {
+  const out = [];
+  for (const gene of GENES) {
+    const a = gene.alleles[genesA[gene.i]];
+    const b = gene.alleles[genesB[gene.i]];
+    if (a.i === b.i) {
+      if (a.p < 0.12) out.push({ gene, allele: a, chance: 1, src: 'shared' });
+    } else {
+      if (a.p < 0.12) out.push({ gene, allele: a, chance: 0.5, src: 'A' });
+      if (b.p < 0.12) out.push({ gene, allele: b, chance: 0.5, src: 'B' });
+    }
+  }
+  return out.sort((x, y) => x.allele.w - y.allele.w);
+}
+
+// Parent snapshot kept on a hybrid, so lineage survives deleting the parent.
+function snapshot(record) {
+  return {
+    id: record.id,
+    name: record.name,
+    genus: { pre: record.genus.pre, suf: record.genus.suf },
+    gen: record.gen || 0,
+    genes: record.genes.slice(),
+  };
+}
+
+// Hybrid record (not yet stored): breeds the genomes, names the child, and records lineage.
+function makeHybrid(recordA, recordB, rng) {
+  const child = breed(recordA.genes, recordB.genes, rng);
+  const analysis = analyze(child.genes);
+  const { name, genus } = hybridName(recordA, recordB, analysis, rng);
+  return {
+    id: newId(),
+    name,
+    genus,
+    genes: child.genes,
+    createdAt: Date.now(),
+    fav: false,
+    gen: Math.max(recordA.gen || 0, recordB.gen || 0) + 1,
+    parents: [snapshot(recordA), snapshot(recordB)],
+    origin: child.origin,
+    mutations: child.mutations,
+    mutationChance: child.mutationChance,
+  };
+}
+
+EG.newId = newId;
+EG.breed = breed;
+EG.forecast = forecast;
+EG.makeHybrid = makeHybrid;
+
 /* @@js:genetics */
 
 /* ===== Naming ===== */
