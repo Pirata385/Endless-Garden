@@ -55,7 +55,7 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
 }
-#app { position: fixed; inset: 0; overflow: hidden; }
+#app { position: fixed; inset: 0; height: 100vh; height: 100dvh; overflow: hidden; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .noscript { padding: 24px; text-align: center; font-family: var(--serif); }
@@ -88,7 +88,12 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   transition: opacity .3s ease, transform .3s ease;
 }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
-@media (prefers-reduced-motion: reduce) { .screen, .toast { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important;
+  }
+}
 
 /* ---------- Home ---------- */
 .home-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
@@ -112,6 +117,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .btn-generate:active { transform: scale(0.98); }
 .btn-generate .gen-label { font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
 .btn-generate .gen-hint { font-size: 13px; opacity: 0.75; }
+.home-actions { display: grid; justify-items: center; gap: 14px; min-width: 0; }
 .home-row { display: flex; gap: 12px; }
 .btn-ghost, .btn-primary, .btn-secondary {
   min-height: 48px; padding: 0 18px; border-radius: 999px; font-size: 15px;
@@ -152,6 +158,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .reveal-top { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
 .reveal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
 .reveal-body > * { flex-shrink: 0; }
+.reveal-info { display: flex; flex-direction: column; gap: 12px; }
+.reveal-info > * { flex-shrink: 0; }
 .reveal-stage {
   position: relative; width: 100%; height: min(50vh, 440px); flex: 0 0 auto; border-radius: 26px; overflow: hidden;
   background: radial-gradient(circle at 50% 45%, rgba(233, 201, 119, 0.1), rgba(233, 201, 119, 0) 62%);
@@ -220,7 +228,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .gallery-sub { margin: 4px 0 6px; font-size: 13px; color: var(--ink-3); }
 .grid {
   flex: 1; min-height: 0; overflow-y: auto; align-content: start; display: grid; grid-auto-rows: max-content;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;
   padding: 4px 2px calc(var(--safe-b) + 24px);
 }
 .grid-sentinel { grid-column: 1 / -1; height: 1px; }
@@ -372,6 +380,20 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #btnSettings { margin-left: auto; }
 .detail-actions #dtUse { grid-column: 1 / -1; }
 
+/* ---------- Landscape phones and short windows: columns side by side ---------- */
+@media (orientation: landscape) and (max-height: 620px) {
+  .home-stage { flex-direction: row; gap: 32px; }
+  .specimen { width: min(62vh, 44vw, 360px); }
+  .btn-generate { min-width: min(40vw, 320px); min-height: 68px; }
+  .reveal-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; overflow: hidden; }
+  .reveal-stage { height: auto; align-self: stretch; }
+  .reveal-info { min-height: 0; overflow-y: auto; padding-right: 4px; }
+  .detail-body { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; overflow: hidden; }
+  .detail-hero { height: auto; align-self: stretch; }
+  .detail-info { min-height: 0; overflow-y: auto; padding-bottom: calc(var(--safe-b) + 20px); }
+  .breed-dock { width: min(100%, 460px); margin: 0 auto; }
+}
+
 /* @@css:components */
 </style>
 </head>
@@ -391,13 +413,15 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
         <canvas id="homeCanvas" aria-hidden="true"></canvas>
         <p class="specimen-caption" id="specimenCaption">Your first specimen waits in the soil.</p>
       </div>
-      <button type="button" class="btn-generate" id="btnGenerate">
-        <span class="gen-label">Generate Plant</span>
-        <span class="gen-hint">45 genes, endless variety</span>
-      </button>
-      <div class="home-row">
-        <button type="button" class="btn-ghost" id="btnGallery">Gallery <span class="count" id="galleryCount">0</span></button>
-        <button type="button" class="btn-ghost" id="btnHybridize">Hybridize</button>
+      <div class="home-actions">
+        <button type="button" class="btn-generate" id="btnGenerate">
+          <span class="gen-label">Generate Plant</span>
+          <span class="gen-hint">45 genes, endless variety</span>
+        </button>
+        <div class="home-row">
+          <button type="button" class="btn-ghost" id="btnGallery">Gallery <span class="count" id="galleryCount">0</span></button>
+          <button type="button" class="btn-ghost" id="btnHybridize">Hybridize</button>
+        </div>
       </div>
     </div>
   </section>
@@ -496,15 +520,17 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
       </header>
       <div class="reveal-body">
         <div class="reveal-stage"><canvas id="rvCanvas" aria-hidden="true"></canvas></div>
-        <h2 class="rv-name" id="rvName"></h2>
-        <p class="rv-lineage" id="rvLineage" hidden></p>
-        <div class="parents rv-parents" id="rvParents" hidden></div>
-        <p class="mutation-note" id="rvMutation" hidden></p>
-        <div class="rv-tier-row"><span class="tier-chip" id="rvTier"></span><span class="badge hybrid" id="rvHybrid" hidden>Hybrid</span><span class="rv-score" id="rvScore"></span></div>
-        <div class="meter" aria-hidden="true"><div class="meter-fill" id="rvMeter"></div></div>
-        <p class="rv-pctl" id="rvPctl"></p>
-        <h3 class="rv-h">Notable traits</h3>
-        <ul class="traits" id="rvTraits"></ul>
+        <div class="reveal-info">
+          <h2 class="rv-name" id="rvName"></h2>
+          <p class="rv-lineage" id="rvLineage" hidden></p>
+          <div class="parents rv-parents" id="rvParents" hidden></div>
+          <p class="mutation-note" id="rvMutation" hidden></p>
+          <div class="rv-tier-row"><span class="tier-chip" id="rvTier"></span><span class="badge hybrid" id="rvHybrid" hidden>Hybrid</span><span class="rv-score" id="rvScore"></span></div>
+          <div class="meter" aria-hidden="true"><div class="meter-fill" id="rvMeter"></div></div>
+          <p class="rv-pctl" id="rvPctl"></p>
+          <h3 class="rv-h">Notable traits</h3>
+          <ul class="traits" id="rvTraits"></ul>
+        </div>
       </div>
       <footer class="reveal-actions">
         <button type="button" class="btn-secondary" id="rvAgain">Generate Another</button>
@@ -3839,15 +3865,16 @@ function init() {
     const hash = el.dataset.nav === 'gallery' ? '#/gallery' : '#/';
     el.addEventListener('click', () => (el.hasAttribute('data-back') ? goBack(hash) : navigate(hash)));
   });
-  window.addEventListener('resize', () => {
-    if (screenEls.home.classList.contains('active')) homeView.resize();
-    if (screenEls.detail.classList.contains('active')) detailView.resize();
-    if (reveal) revealView.resize();
-  });
   initGallery();
   initDetail();
   detailView = new PlantView($('dtCanvas'), {});
   applyParticles();
+  // Each plant canvas re-fits when its box changes size: a turn, a window resize, or a screen being shown.
+  const plantViews = new Map([[$('homeCanvas'), homeView], [$('rvCanvas'), revealView], [$('dtCanvas'), detailView]]);
+  const plantBoxes = new ResizeObserver((entries) => {
+    for (const entry of entries) plantViews.get(entry.target).resize();
+  });
+  plantViews.forEach((view, canvas) => plantBoxes.observe(canvas));
   $('dtShare').addEventListener('click', shareDetail);
   $('btnSettings').addEventListener('click', openSettings);
   $('stHaptics').addEventListener('click', () => setSetting('haptics', !Store.settings.haptics));
