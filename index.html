@@ -321,6 +321,37 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .detail-actions .btn-danger { grid-column: 1 / -1; }
 .trait-gene { overflow-wrap: anywhere; }
 
+/* ---------- Breed mode: selected cards, the dock, and the hybrid reveal ---------- */
+.card.selected { box-shadow: 0 0 0 2px var(--gold); }
+.slot-mark {
+  position: absolute; left: 6px; top: 6px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--gold); color: #1a1408; font-size: 13px; font-weight: 700; pointer-events: none;
+}
+.breed-dock {
+  flex: 0 0 auto; display: grid; gap: 10px; padding: 12px; border-radius: 22px;
+  background: rgba(7, 24, 18, 0.92); border: 1px solid var(--line);
+}
+.breed-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.breed-slot {
+  display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px; min-width: 0;
+  border-radius: 16px; background: var(--card); border: 1px dashed var(--line);
+}
+.breed-slot.empty { justify-content: center; font-size: 13px; color: var(--ink-3); }
+.breed-slot img { width: 48px; height: 48px; flex: 0 0 auto; object-fit: contain; }
+.slot-name { margin: 0; font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; }
+.breed-hint { margin: 0; font-size: 13px; color: var(--ink-2); }
+.breed-forecast { padding: 0; }
+.forecast-chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12px; color: var(--ink-2); white-space: nowrap;
+}
+.breed-note { margin: 0; font-size: 12px; color: var(--ink-3); }
+.breed-dock .btn-primary { min-height: 48px; }
+.rv-parents { grid-template-columns: 1fr 1fr; gap: 8px; }
+.rv-parents .parent { display: flex; align-items: center; gap: 10px; justify-items: initial; padding: 8px; min-width: 0; }
+.rv-parents .parent img { width: 44px; height: 44px; max-width: none; flex: 0 0 auto; }
+.rv-parents .parent-name { text-align: left; min-width: 0; overflow-wrap: anywhere; }
+
 /* @@css:components */
 </style>
 </head>
@@ -344,8 +375,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
         <span class="gen-hint">45 genes, endless variety</span>
       </button>
       <div class="home-row">
-        <button type="button" class="btn-ghost" id="btnGallery" data-nav="gallery">Gallery <span class="count" id="galleryCount">0</span></button>
-        <button type="button" class="btn-ghost" id="btnHybridize" data-nav="gallery">Hybridize</button>
+        <button type="button" class="btn-ghost" id="btnGallery">Gallery <span class="count" id="galleryCount">0</span></button>
+        <button type="button" class="btn-ghost" id="btnHybridize">Hybridize</button>
       </div>
     </div>
   </section>
@@ -353,7 +384,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   <section id="screen-gallery" class="screen" aria-label="Gallery">
     <header class="topbar">
       <button class="icon-btn" type="button" data-nav="home" data-back aria-label="Back to home">&#8249;</button>
-      <div class="brand-block"><h2 class="title">Gallery</h2></div>
+      <div class="brand-block"><h2 class="title" id="gTitle">Gallery</h2></div>
     </header>
     <div class="gallery-tools">
       <input type="search" id="gSearch" class="search-input" placeholder="Search names or traits" aria-label="Search specimens" autocomplete="off">
@@ -370,6 +401,16 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
     <p class="gallery-sub" id="gSub"></p>
     <div class="grid" id="gGrid"></div>
     <div class="gallery-empty" id="gEmpty" hidden></div>
+    <section class="breed-dock" id="breedDock" hidden aria-label="Parents for hybridization">
+      <div class="breed-slots">
+        <div class="breed-slot" id="slotA"></div>
+        <div class="breed-slot" id="slotB"></div>
+      </div>
+      <p class="breed-hint" id="breedHint"></p>
+      <div class="chips breed-forecast" id="breedForecast" aria-label="Rare traits they may pass on"></div>
+      <p class="breed-note">5–12% chance of mutation</p>
+      <button type="button" class="btn-primary" id="breedGo" disabled>Hybridize</button>
+    </section>
   </section>
 
   <section id="screen-detail" class="screen" aria-label="Specimen details">
@@ -435,7 +476,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
         <div class="reveal-stage"><canvas id="rvCanvas" aria-hidden="true"></canvas></div>
         <h2 class="rv-name" id="rvName"></h2>
         <p class="rv-lineage" id="rvLineage" hidden></p>
-        <div class="rv-tier-row"><span class="tier-chip" id="rvTier"></span><span class="rv-score" id="rvScore"></span></div>
+        <div class="parents rv-parents" id="rvParents" hidden></div>
+        <p class="mutation-note" id="rvMutation" hidden></p>
+        <div class="rv-tier-row"><span class="tier-chip" id="rvTier"></span><span class="badge hybrid" id="rvHybrid" hidden>Hybrid</span><span class="rv-score" id="rvScore"></span></div>
         <div class="meter" aria-hidden="true"><div class="meter-fill" id="rvMeter"></div></div>
         <p class="rv-pctl" id="rvPctl"></p>
         <h3 class="rv-h">Notable traits</h3>
@@ -2501,6 +2544,18 @@ function go(name, id = null) {
   }
 }
 
+// A parent's aura color: its flower's light shade, or the light shade of its leaves when the flower is rainbow.
+function auraColor(record) {
+  const T = traitsOf(record.genes);
+  const flower = T.flowerColor.v;
+  return Array.isArray(flower) ? flower[1] : T.leafPalette.v[1];
+}
+
+// Hybrids glow in both parents' colors. Pure plants pass null, so an earlier hybrid aura cannot linger on a PlantView.
+function auraOptions(record) {
+  return { hybridColors: record.parents ? record.parents.map(auraColor) : null };
+}
+
 function renderHome() {
   const plants = Store.all();
   $('galleryCount').textContent = String(plants.length);
@@ -2510,7 +2565,7 @@ function renderHome() {
     return;
   }
   const latest = plants[0];
-  homeView.setPlant(latest, { animate: false });
+  homeView.setPlant(latest, { animate: false, ...auraOptions(latest) });
   $('specimenCaption').textContent = `${latest.name} · ${analyze(latest.genes).tier.label}`;
 }
 
@@ -2679,25 +2734,12 @@ function formatPct(v) {
   return `${v < 10 ? Number(v.toFixed(1)) : Math.round(v)}%`;
 }
 
-function renderTraits(notable) {
+function renderTraits(record, notable) {
   const list = $('rvTraits');
   list.textContent = '';
-  notable.forEach(({ gene, allele }, i) => {
-    const li = document.createElement('li');
-    li.className = 'trait';
+  notable.forEach((item, i) => {
+    const li = traitRow(record, item);
     li.style.animationDelay = `${0.35 + i * 0.07}s`;
-    const left = document.createElement('div');
-    const name = document.createElement('span');
-    name.className = 'trait-name';
-    name.textContent = allele.name;
-    const geneLabel = document.createElement('span');
-    geneLabel.className = 'trait-gene';
-    geneLabel.textContent = gene.label;
-    left.append(name, geneLabel);
-    const pct = document.createElement('span');
-    pct.className = `trait-pct r-${rarityClass(allele.p)}`;
-    pct.textContent = formatPct(allele.p * 100);
-    li.append(left, pct);
     list.append(li);
   });
 }
@@ -2709,15 +2751,16 @@ function setSaveButton(saved) {
 }
 
 // Shows a specimen full screen with its growth animation, tier, rarity meter, and notable traits.
+// A hybrid also shows its parents, the mutation callout, and Breed Again, which breeds the same two parents again.
 function openReveal(record, opts = {}) {
   const analysis = analyze(record.genes);
-  reveal = { record, saved: Boolean(Store.get(record.id)) };
+  reveal = { record, saved: Boolean(Store.get(record.id)), parents: opts.parents || null };
   const hybrid = Boolean(opts.hybrid || record.parents);
   $('rvKicker').textContent = hybrid ? `Hybrid specimen · Gen ${record.gen}` : 'New specimen';
   $('rvName').textContent = record.name;
-  const lineage = $('rvLineage');
-  lineage.hidden = !record.parents;
-  lineage.textContent = record.parents ? `${record.parents[0].name} × ${record.parents[1].name}` : '';
+  $('rvHybrid').hidden = !hybrid;
+  $('rvAgain').textContent = hybrid ? 'Breed Again' : 'Generate Another';
+  paintLineage(record, { line: $('rvLineage'), parents: $('rvParents'), mutation: $('rvMutation') });
   const chip = $('rvTier');
   chip.textContent = analysis.tier.label;
   chip.className = `tier-chip tier-${analysis.tier.id}`;
@@ -2728,11 +2771,11 @@ function openReveal(record, opts = {}) {
   requestAnimationFrame(() => {
     meter.style.width = `${analysis.score.toFixed(1)}%`;
   });
-  renderTraits(analysis.notable.slice(0, 8));
+  renderTraits(record, analysis.notable.slice(0, 8));
   setSaveButton(reveal.saved);
   $('overlay-reveal').hidden = false;
   revealView.resize();
-  revealView.setPlant(record, { animate: true, growDuration: 1.8 });
+  revealView.setPlant(record, { animate: true, growDuration: 1.8, ...auraOptions(record) });
   revealView.start();
   buzz(TIER_IDS.indexOf(analysis.tier.id) >= 3 ? [20, 40, 20] : [10]);
 }
@@ -2745,14 +2788,21 @@ function closeReveal() {
   reveal = null;
 }
 
-// Saving is idempotent: the button disables itself, and the store ignores a repeat.
+// Saving is idempotent: the button disables itself, and the store ignores a repeat. The screen behind the reveal redraws at once.
 function saveReveal() {
   if (!reveal || reveal.saved) return;
   Store.add(reveal.record);
   reveal.saved = true;
   setSaveButton(true);
+  refreshVisible();
   buzz([8]);
   showToast('Saved to your gallery');
+}
+
+// Redraws the list on screen after the garden changes, so home and the gallery never show a stale count.
+function refreshVisible() {
+  if (screenEls.home.classList.contains('active')) renderHome();
+  if (screenEls.gallery.classList.contains('active')) refreshGallery();
 }
 
 // Generate: a busy guard stops double taps from starting a second run.
@@ -2767,6 +2817,27 @@ async function generateFlow() {
   } finally {
     busy = false;
   }
+}
+
+// Breeding runs the lab with both parents, then opens the hybrid reveal. The busy guard stops a second run from a double tap.
+async function breedFlow(parents) {
+  if (busy) return;
+  busy = true;
+  try {
+    buzz([12]);
+    const record = makeHybrid(parents[0], parents[1], rngFrom(randomSeed()));
+    await openLab('hybridize', { parents });
+    openReveal(record, { hybrid: true, parents });
+  } finally {
+    busy = false;
+  }
+}
+
+// Hybridize from the dock: the two selected parents, as long as both are still in the gallery.
+function hybridize() {
+  const parents = breedState.parents.map((id) => Store.get(id));
+  if (parents.length !== 2 || !parents.every(Boolean)) return Promise.resolve();
+  return breedFlow(parents);
 }
 
 /* ---------- Gallery: grid, search, filters, sorting, and card actions ---------- */
@@ -2868,15 +2939,18 @@ function renderGallery() {
   refreshGallery();
 }
 
-// Header and grid, keeping how many cards are loaded so far.
+// Header and grid, keeping how many cards are loaded so far. A parent deleted elsewhere leaves the selection.
 function refreshGallery() {
   const all = Store.all();
   const hybrids = all.filter(isHybrid).length;
   const favorites = all.filter((r) => r.fav).length;
   $('gSub').textContent = `${plural(all.length, 'specimen')} · ${plural(hybrids, 'hybrid')} · ${plural(favorites, 'favorite')}`;
   $('gSort').value = galleryState.sort;
+  $('gTitle').textContent = galleryState.breed ? 'Hybridize' : 'Gallery';
+  breedState.parents = breedState.parents.filter((id) => Store.get(id));
   renderFilters();
   paintGrid();
+  paintBreedDock();
 }
 
 // Rebuilds the loaded cards and keeps the scroll position.
@@ -2900,6 +2974,7 @@ function paintGrid() {
   }
   grid.scrollTop = top;
   renderEmpty(list.length);
+  paintSelection();
 }
 
 function renderEmpty(count) {
@@ -3031,7 +3106,86 @@ function onSentinel(entries) {
 }
 
 function onCardTap(id) {
-  openDetail(id);
+  if (galleryState.breed) toggleParent(id);
+  else openDetail(id);
+}
+
+// Breed selection. Tapping a selected plant clears its slot. A third plant replaces the older of the two,
+// so one plant can never hold both slots.
+function toggleParent(id) {
+  const parents = breedState.parents;
+  const at = parents.indexOf(id);
+  if (at !== -1) {
+    parents.splice(at, 1);
+  } else {
+    if (parents.length === 2) parents.shift();
+    parents.push(id);
+  }
+  buzz([6]);
+  paintSelection();
+  paintBreedDock();
+}
+
+// Marks the loaded cards that are parents, A or B, without rebuilding the grid.
+function paintSelection() {
+  for (const card of $('gGrid').querySelectorAll('.card')) {
+    const slot = galleryState.breed ? breedState.parents.indexOf(card.dataset.id) : -1;
+    card.classList.toggle('selected', slot !== -1);
+    let mark = card.querySelector('.slot-mark');
+    if (slot === -1) {
+      if (mark) mark.remove();
+      continue;
+    }
+    if (!mark) {
+      mark = document.createElement('span');
+      mark.className = 'slot-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      card.append(mark);
+    }
+    mark.textContent = slot === 0 ? 'A' : 'B';
+  }
+}
+
+// The breed dock: both parents, the rarest traits they may pass on, the mutation note, and Hybridize, enabled at two.
+function paintBreedDock() {
+  const dock = $('breedDock');
+  dock.hidden = !galleryState.breed;
+  if (!galleryState.breed) return;
+  const parents = breedState.parents.map((id) => Store.get(id));
+  paintSlot($('slotA'), parents[0], 'A');
+  paintSlot($('slotB'), parents[1], 'B');
+  const chips = $('breedForecast');
+  const hint = $('breedHint');
+  chips.textContent = '';
+  if (parents.length < 2) {
+    hint.textContent = parents.length ? 'Choose one more parent to see what they may pass on.' : 'Choose two parents to see what they may pass on.';
+  } else {
+    const traits = forecast(parents[0].genes, parents[1].genes).slice(0, 6);
+    hint.textContent = traits.length ? 'Rare traits they may pass on' : 'None of their rare traits are likely to pass on.';
+    for (const { allele, chance } of traits) {
+      const chip = document.createElement('span');
+      chip.className = 'forecast-chip';
+      chip.textContent = `${allele.name} · ${Math.round(chance * 100)}%`;
+      chips.append(chip);
+    }
+  }
+  $('breedGo').disabled = parents.length !== 2;
+}
+
+function paintSlot(slot, parent, label) {
+  slot.textContent = '';
+  slot.classList.toggle('empty', !parent);
+  if (!parent) {
+    slot.textContent = `Choose parent ${label}`;
+    return;
+  }
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = renderThumb(parent);
+  const name = document.createElement('p');
+  name.className = 'slot-name';
+  name.textContent = `${label} · ${parent.name}`;
+  slot.append(img, name);
 }
 
 function toggleFavorite(id) {
@@ -3215,8 +3369,10 @@ async function deleteSpecimen(id) {
 }
 
 // Breed mode and the detail view both open from here. The gallery opens with its filters and sort kept.
+// Breed mode starts with the given parents (up to two). A normal open leaves breed mode and clears the selection.
 function openGallery(opts = {}) {
   galleryState.breed = Boolean(opts.breed);
+  breedState.parents = galleryState.breed ? (opts.parents || []).slice(0, 2) : [];
   navigate('#/gallery');
 }
 
@@ -3306,58 +3462,60 @@ function renderBadges(record, analysis) {
   }
 }
 
-// Lineage: the parents' names and thumbnails, from the snapshots kept on the hybrid. Mutations are listed beneath.
-function renderLineage(record) {
-  const line = $('dtLineage');
-  const parents = $('dtParents');
-  const mutation = $('dtMutation');
-  parents.textContent = '';
-  line.hidden = !record.parents;
-  parents.hidden = !record.parents;
-  mutation.hidden = !(record.mutations && record.mutations.length);
-  if (record.parents) {
-    line.textContent = `Generation ${record.gen} · bred from two parents`;
-    record.parents.forEach((parent, i) => {
-      const card = document.createElement('div');
-      card.className = 'parent';
-      const img = document.createElement('img');
-      img.alt = '';
-      img.src = renderThumb(parent);
-      const label = document.createElement('p');
-      label.className = 'parent-name';
-      label.textContent = `${i === 0 ? 'Parent A' : 'Parent B'} · ${parent.name}`;
-      card.append(img, label);
-      parents.append(card);
-    });
-  }
-  if (!mutation.hidden) {
-    mutation.textContent = `Mutation: ${record.mutations
-      .map((m) => `${GENES[m.gene].label} → ${GENES[m.gene].alleles[m.allele].name}`)
-      .join(', ')}`;
-  }
+// Lineage for a hybrid: the generation line, a card per parent from the snapshots it keeps, and the mutation callout.
+// Pure plants hide all three. The detail view and the reveal both paint through here.
+function paintLineage(record, els) {
+  const hybrid = Boolean(record.parents);
+  els.line.hidden = !hybrid;
+  els.line.textContent = hybrid ? `Generation ${record.gen} · bred from two parents` : '';
+  els.parents.hidden = !hybrid;
+  els.parents.textContent = '';
+  if (hybrid) record.parents.forEach((parent, i) => els.parents.append(parentCard(parent, i === 0 ? 'Parent A' : 'Parent B')));
+  const callout = hybrid && record.mutations && record.mutations.length
+    ? `Mutation: ${record.mutations.map((m) => `${GENES[m.gene].label} → ${GENES[m.gene].alleles[m.allele].name}`).join(', ')}`
+    : '';
+  els.mutation.hidden = !callout;
+  els.mutation.textContent = callout;
+}
+
+// A parent as a card: its thumbnail and its name, labelled by slot.
+function parentCard(parent, label) {
+  const card = document.createElement('div');
+  card.className = 'parent';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = renderThumb(parent);
+  const text = document.createElement('p');
+  text.className = 'parent-name';
+  text.textContent = `${label} · ${parent.name}`;
+  card.append(img, text);
+  return card;
+}
+
+// One notable trait: its allele, its gene with the origin tag when the plant has one, and its rarity.
+function traitRow(record, { gene, allele }) {
+  const li = document.createElement('li');
+  li.className = 'trait';
+  const left = document.createElement('div');
+  const name = document.createElement('span');
+  name.className = 'trait-name';
+  name.textContent = allele.name;
+  const geneLabel = document.createElement('span');
+  geneLabel.className = 'trait-gene';
+  geneLabel.textContent = record.origin ? `${gene.label} · ${ORIGIN_LABELS[record.origin[gene.i]]}` : gene.label;
+  left.append(name, geneLabel);
+  const pct = document.createElement('span');
+  pct.className = `trait-pct r-${rarityClass(allele.p)}`;
+  pct.textContent = formatPct(allele.p * 100);
+  li.append(left, pct);
+  return li;
 }
 
 function renderTraitList(record, analysis) {
   const list = $('dtTraits');
   list.textContent = '';
   const items = detail.showAll ? analysis.notable : analysis.notable.slice(0, 8);
-  for (const { gene, allele } of items) {
-    const li = document.createElement('li');
-    li.className = 'trait';
-    const left = document.createElement('div');
-    const name = document.createElement('span');
-    name.className = 'trait-name';
-    name.textContent = allele.name;
-    const geneLabel = document.createElement('span');
-    geneLabel.className = 'trait-gene';
-    geneLabel.textContent = record.origin ? `${gene.label} · ${ORIGIN_LABELS[record.origin[gene.i]]}` : gene.label;
-    left.append(name, geneLabel);
-    const pct = document.createElement('span');
-    pct.className = `trait-pct r-${rarityClass(allele.p)}`;
-    pct.textContent = formatPct(allele.p * 100);
-    li.append(left, pct);
-    list.append(li);
-  }
+  for (const item of items) list.append(traitRow(record, item));
   const more = $('dtShowAll');
   more.hidden = analysis.notable.length <= 8;
   more.textContent = detail.showAll ? 'Show fewer traits' : `Show all ${analysis.notable.length} traits`;
@@ -3404,12 +3562,12 @@ function renderDetail(id) {
   requestAnimationFrame(() => {
     meter.style.width = `${analysis.score.toFixed(1)}%`;
   });
-  renderLineage(record);
+  paintLineage(record, { line: $('dtLineage'), parents: $('dtParents'), mutation: $('dtMutation') });
   renderTraitList(record, analysis);
   renderGenome(record);
   setFavoriteButton(record);
   detailView.resize();
-  detailView.setPlant(record, { animate: true, growDuration: 1.2 });
+  detailView.setPlant(record, { animate: true, growDuration: 1.2, ...auraOptions(record) });
   detailView.start();
 }
 
@@ -3434,8 +3592,7 @@ function initDetail() {
     renderTraitList(record, analysisOf(record));
   });
   $('dtUse').addEventListener('click', () => {
-    breedState.parents = [detail.id];
-    openGallery({ breed: true });
+    openGallery({ breed: true, parents: [detail.id] });
   });
   $('dtDelete').addEventListener('click', async () => {
     const id = detail.id;
@@ -3449,9 +3606,14 @@ function init() {
   $('btnGenerate').addEventListener('click', generateFlow);
   $('rvSave').addEventListener('click', saveReveal);
   $('rvAgain').addEventListener('click', () => {
+    const parents = reveal && reveal.parents;
     closeReveal();
-    generateFlow();
+    if (parents) breedFlow(parents);
+    else generateFlow();
   });
+  $('btnGallery').addEventListener('click', () => openGallery());
+  $('btnHybridize').addEventListener('click', () => openGallery({ breed: true }));
+  $('breedGo').addEventListener('click', hybridize);
   $('rvClose').addEventListener('click', closeReveal);
   // Forward buttons push their screen; back arrows (data-back) step back through history.
   document.querySelectorAll('[data-nav]').forEach((el) => {
