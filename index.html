@@ -341,6 +341,55 @@ EG.CAL = CAL;
 /* @@js:genetics */
 
 /* ===== Naming ===== */
+/* ---------- Procedural names (spec section 7) ---------- */
+// Genus = prefix + suffix. Pure plants may take an adjective epithet, placed before the genus.
+// Legendary and Mythic always take a legend phrase, placed after the genus.
+const PREFIXES = Object.freeze(['Lumi', 'Shade', 'Ember', 'Moon', 'Silk', 'Thorn', 'Aster', 'Velvet', 'Nyx', 'Cinder', 'Frost', 'Ivy', 'Sable', 'Gilt', 'Mire', 'Opal', 'Briar', 'Halo', 'Dusk', 'Pearl', 'Wisp', 'Ash', 'Rune', 'Fern', 'Lark', 'Myrrh', 'Sol', 'Tide', 'Vale', 'Corin', 'Amara', 'Ilex', 'Selene', 'Vesper', 'Lysa', 'Maren', 'Oriel', 'Quill', 'Ravel', 'Sylva']);
+const SUFFIXES = Object.freeze(['nara', 'veil', 'root', 'thorn', 'bloom', 'wisp', 'glade', 'dew', 'crest', 'spire', 'lune', 'mere', 'frond', 'bark', 'ling', 'ora', 'ia', 'ell', 'orn', 'wyn', 'loom', 'gleam', 'mantle', 'hollow', 'bell', 'tide', 'fall', 'whisper', 'ana', 'ine', 'ara']);
+const EPITHETS = Object.freeze(['Gentle', 'Quiet', 'Silver', 'Wild', 'Hollow', 'Amber', 'Pale', 'Gilded', 'Hushed', 'Sunward', 'Starlit', 'Tidal', 'Mistbound', 'Verdant', 'Nightbloom', 'Ashen', 'Pearled', 'Lantern', 'Dawnlit', 'Moonlit', 'Rimed', 'Glasswing', 'Umbral', 'Candled', 'Emberlit']);
+const LEGEND_EPITHETS = Object.freeze(['of the Hollow Sun', 'the Everbloom', 'of Forgotten Dawns', 'the Starbearer', 'of the Deep Glade', 'Eternal', 'of the Vesper Gate', 'the Unfading']);
+
+function pick(rng, list) {
+  return list[Math.floor(rng() * list.length)];
+}
+
+function genusText(genus) {
+  return genus.pre + genus.suf;
+}
+
+// Epithet rules: Legendary and Mythic always take a legend phrase; other tiers take an adjective 45% of the time.
+function applyEpithet(base, tierId, rng) {
+  if (tierId === 'legendary' || tierId === 'mythic') return `${base} ${pick(rng, LEGEND_EPITHETS)}`;
+  if (rng() < 0.45) return `${pick(rng, EPITHETS)} ${base}`;
+  return base;
+}
+
+// Pure plant name. A pure function of the genome seed, so one genome always gets one name.
+function pureName(analysis) {
+  const rng = rngFrom(fnv1a(`name:${analysis.seed}`));
+  const genus = { pre: pick(rng, PREFIXES), suf: pick(rng, SUFFIXES) };
+  return { name: applyEpithet(genusText(genus), analysis.tier.id, rng), genus };
+}
+
+// Hybrid name. Half the time "A × B" from the parents' genera; otherwise a blended genus.
+// The hybrid genus is always the parents' blend (A's prefix + B's suffix), so later crosses keep it.
+function hybridName(recordA, recordB, analysis, rng) {
+  const genus = { pre: recordA.genus.pre, suf: recordB.genus.suf };
+  if (rng() < 0.5) {
+    const pair = `${genusText(recordA.genus)} × ${genusText(recordB.genus)}`;
+    const legendary = analysis.tier.id === 'legendary' || analysis.tier.id === 'mythic';
+    return { name: legendary ? `${pair} ${pick(rng, LEGEND_EPITHETS)}` : pair, genus };
+  }
+  return { name: applyEpithet(genusText(genus), analysis.tier.id, rng), genus };
+}
+
+EG.PREFIXES = PREFIXES;
+EG.SUFFIXES = SUFFIXES;
+EG.EPITHETS = EPITHETS;
+EG.LEGEND_EPITHETS = LEGEND_EPITHETS;
+EG.pureName = pureName;
+EG.hybridName = hybridName;
+
 /* @@js:naming */
 
 /* ===== Layout ===== */
