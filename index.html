@@ -798,9 +798,838 @@ EG.buildLayout = buildLayout;
 /* @@js:layout */
 
 /* ===== Renderer ===== */
+/* ---------- Renderer: cluster sprites, per-frame drawing, and PlantView ---------- */
+// Cluster sprites are drawn at this fraction of display resolution, which keeps memory bounded on phones.
+const SPRITE_SCALE = 0.6;
+const FOLIAGE_SHAPE = { needle: 'needle', scale: 'scale', frond: 'frond', ribbon: 'ribbon', glass: 'glass' };
+const FOLIAGE_LENGTH = { needle: 1.3, frond: 1.4, ribbon: 1.6, glass: 1.1 };
+const BLOOM = {
+  cup: { w: 0.42, l: 0.55, off: 0.45, spin: 0 },
+  bell: { w: 0.5, l: 0.42, off: 0.35, spin: 0 },
+  star: { w: 0.16, l: 0.6, off: 0.6, spin: 0 },
+  tube: { w: 0.12, l: 0.42, off: 0.5, spin: 0 },
+  spiral: { w: 0.3, l: 0.55, off: 0.5, spin: 1 },
+  spray: { w: 0.3, l: 0.42, off: 0.5, spin: 0 },
+};
+const SEASON = {
+  blush: { mix: [217, 87, 43], amount: 0.5, chance: 0.35 },
+  dawn: { mix: [242, 167, 184], amount: 0.45, chance: 0.25 },
+  frost: { mix: [230, 244, 255], amount: 0.4, chance: 0.3 },
+};
+
+// Leaf half-width at x in [0, 1], in leaf-length units. Edge modifiers below shape the outline.
+const SHAPE_H = {
+  oval: (x) => 0.5 * Math.pow(Math.sin(Math.PI * x), 0.85),
+  heart: (x) => 0.5 * Math.pow(Math.sin(Math.PI * Math.pow(x, 0.75)), 0.9) * (1 - 0.45 * Math.exp(-14 * x)),
+  lance: (x) => 0.3 * Math.pow(Math.sin(Math.PI * x), 0.7) * (1 - 0.35 * x),
+  palm: (x) => 0.5 * Math.sin(Math.PI * x) * (0.62 + 0.38 * Math.abs(Math.cos(3 * Math.PI * x))),
+  round: (x) => 0.5 * Math.sqrt(Math.max(0, 1 - Math.pow(2 * x - 1, 2))),
+  feather: (x) => 0.16 * Math.pow(Math.sin(Math.PI * x), 0.6),
+  star: (x) => 0.5 * Math.sin(Math.PI * x) * (0.5 + 0.5 * Math.abs(Math.cos(2.5 * Math.PI * x))),
+  fan: (x) => 0.5 * Math.pow(x, 0.55) * (1 - 0.15 * x),
+  scale: (x) => 0.32 * Math.sqrt(Math.max(0, 1 - Math.pow(2 * x - 1, 2))),
+  needle: (x) => 0.03 + 0.012 * Math.sin(Math.PI * x),
+  frond: (x) => 0.12 * Math.pow(Math.sin(Math.PI * x), 0.5),
+  ribbon: (x) => 0.07 + 0.02 * Math.sin(6 * x),
+  glass: (x) => 0.2 * Math.pow(Math.sin(Math.PI * Math.pow(x, 0.6)), 1.2),
+};
+// Edge modifiers. i is the point index along one side, so serrations alternate on both sides.
+const EDGE_MOD = {
+  smooth: () => 1,
+  serrated: (x, i) => (i % 2 ? 0.8 : 1),
+  lobed: (x) => 1 + 0.18 * Math.sin(x * TAU * 2.5),
+  frilled: (x) => 1 + 0.12 * Math.sin(x * TAU * 7),
+  spiked: (x, i) => (i % 2 ? 0.7 : 1.12),
+  lace: (x) => 1 + 0.08 * Math.sin(x * TAU * 11),
+};
+const LEAF_OUTLINES = new Map();
+
+// Outline of a leaf as a flat [x0, y0, x1, y1, ...] array, computed once per shape and edge.
+function leafOutline(shape, edge) {
+  const key = `${shape}|${edge}`;
+  let pts = LEAF_OUTLINES.get(key);
+  if (pts) return pts;
+  const N = 14;
+  const h = SHAPE_H[shape] || SHAPE_H.oval;
+  const mod = EDGE_MOD[edge] || EDGE_MOD.smooth;
+  pts = new Float32Array(4 * (N + 1));
+  let k = 0;
+  for (let i = 0; i <= N; i++) {
+    const x = i / N;
+    pts[k++] = x;
+    pts[k++] = -h(x) * mod(x, i);
+  }
+  for (let i = N; i >= 0; i--) {
+    const x = i / N;
+    pts[k++] = x;
+    pts[k++] = h(x) * mod(x, i);
+  }
+  LEAF_OUTLINES.set(key, pts);
+  return pts;
+}
+
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function mixRgb(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function rgbStr(c, alpha) {
+  const r = Math.round(c[0]);
+  const g = Math.round(c[1]);
+  const b = Math.round(c[2]);
+  return alpha === undefined ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Eases in and overshoots slightly, so clusters pop into place as they grow.
+function easeOutBack(x) {
+  const c1 = 1.25;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+// Growth of a node or cluster born at 'birth', for growth value g in [0, 1].
+function growthOf(birth, g) {
+  const x = clamp01((g - birth) / 0.24);
+  return x * x * (3 - 2 * x);
+}
+
+// Render settings derived from the traits, shared by every cluster of one plant.
+function renderEnv(T) {
+  const season = T.seasonalShift.v;
+  const palette = season === 'gold' ? ['#b8862c', '#ffe08a'] : T.leafPalette.v;
+  const broad = T.foliageType.v === 'broad';
+  const fc = T.flowerColor.v;
+  return {
+    dark: hexToRgb(palette[0]),
+    light: hexToRgb(palette[1]),
+    shape: broad ? T.leafShape.v : FOLIAGE_SHAPE[T.foliageType.v],
+    edge: broad ? T.leafEdge.v : 'smooth',
+    lengthScale: FOLIAGE_LENGTH[T.foliageType.v] || 1,
+    leafLength: 0.075 * T.leafSize.v,
+    arrangement: T.leafArrangement.v,
+    gradient: T.leafGradient.v,
+    season,
+    blossom: season === 'blossom',
+    bloomName: T.bloomStyle.v,
+    petals: T.petalCount.v,
+    rainbow: fc === 'rainbow',
+    flowerColor: fc === 'rainbow' ? null : [hexToRgb(fc[0]), hexToRgb(fc[1])],
+    flowerSize: T.flowerSize.v,
+    glow: T.bioluminescentFlowers.v === 1,
+    fruit: T.fruitType.v,
+    fruitColor: hexToRgb(T.fruitColor.v),
+    fruitSize: T.fruitSize.v,
+    fruitArrangement: T.fruitArrangement.v,
+  };
+}
+
+// Leaves of one cluster: position, angle, length, tone, back or front layer, and season tint.
+function leafSpecs(c, env, rng) {
+  const n = c.leaves;
+  const r = c.radius;
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    let th;
+    let d;
+    let ang;
+    switch (env.arrangement) {
+      case 'alt':
+        th = -1.2 + 2.4 * (n > 1 ? k / (n - 1) : 0.5) + (rng() - 0.5) * 0.3;
+        d = r * (0.2 + 0.25 * rng());
+        ang = th + (rng() - 0.5) * 0.4;
+        break;
+      case 'opp': {
+        const side = k % 2 ? 1 : -1;
+        th = side * (0.8 + 0.2 * rng()) + (Math.floor(k / 2) / Math.max(1, n / 2) - 0.5) * 1.1;
+        d = r * (0.15 + 0.2 * rng());
+        ang = th + (rng() - 0.5) * 0.4;
+        break;
+      }
+      case 'whorl':
+        th = (TAU * k) / n + (rng() - 0.5) * 0.2;
+        d = r * 0.2;
+        ang = th;
+        break;
+      case 'rosette':
+        th = (TAU * k) / n;
+        d = r * (0.12 + 0.08 * rng());
+        ang = th;
+        break;
+      case 'spiral':
+        th = k * 2.39996;
+        d = r * 0.75 * Math.sqrt((k + 1) / n);
+        ang = th;
+        break;
+      default:
+        th = (rng() - 0.5) * 0.8;
+        d = r * 0.25 * rng();
+        ang = th + (rng() - 0.5) * 0.35;
+    }
+    const season = SEASON[env.season] && rng() < SEASON[env.season].chance ? env.season : null;
+    out.push({
+      x: Math.cos(th) * d,
+      y: Math.sin(th) * d,
+      ang,
+      len: env.leafLength * env.lengthScale * (0.75 + 0.5 * rng()),
+      tone: 0.25 + 0.7 * rng(),
+      back: rng() < 0.3,
+      season,
+    });
+  }
+  return out;
+}
+
+// Fill for one leaf, in the leaf's own unit space. The gradient mode comes from the leaf gradient gene.
+function leafFill(x, base, env) {
+  const light = mixRgb(base, env.light, 0.35);
+  const dark = mixRgb(base, env.dark, 0.5);
+  switch (env.gradient) {
+    case 'two': {
+      const g = x.createLinearGradient(0, -0.5, 0, 0.5);
+      g.addColorStop(0, rgbStr(light));
+      g.addColorStop(1, rgbStr(dark));
+      return g;
+    }
+    case 'radial': {
+      const g = x.createRadialGradient(0.3, 0, 0.02, 0.3, 0, 0.9);
+      g.addColorStop(0, rgbStr(light));
+      g.addColorStop(1, rgbStr(dark));
+      return g;
+    }
+    case 'irid': {
+      const g = x.createLinearGradient(0, 0, 1, 0);
+      g.addColorStop(0, rgbStr(base));
+      g.addColorStop(0.5, rgbStr(mixRgb(base, [127, 208, 255], 0.35)));
+      g.addColorStop(1, rgbStr(dark));
+      return g;
+    }
+    case 'aurora': {
+      const g = x.createLinearGradient(0, 0, 1, 0);
+      g.addColorStop(0, rgbStr(mixRgb(base, [79, 209, 197], 0.45)));
+      g.addColorStop(0.5, rgbStr(mixRgb(base, [139, 111, 224], 0.45)));
+      g.addColorStop(1, rgbStr(mixRgb(base, [242, 200, 107], 0.4)));
+      return g;
+    }
+    default:
+      return rgbStr(base);
+  }
+}
+
+function drawLeaf(x, s, env) {
+  const pts = leafOutline(env.shape, env.edge);
+  let base = mixRgb(env.dark, env.light, s.tone);
+  if (s.season) base = mixRgb(base, SEASON[s.season].mix, SEASON[s.season].amount);
+  x.save();
+  x.translate(s.x, s.y);
+  x.rotate(s.ang);
+  x.scale(s.len, s.len);
+  x.beginPath();
+  x.moveTo(pts[0], pts[1]);
+  for (let p = 2; p < pts.length; p += 2) x.lineTo(pts[p], pts[p + 1]);
+  x.closePath();
+  x.fillStyle = leafFill(x, base, env);
+  x.fill();
+  x.strokeStyle = s.back ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.16)';
+  x.lineWidth = 0.025;
+  x.beginPath();
+  x.moveTo(0.03, 0);
+  x.lineTo(0.9, 0);
+  x.stroke();
+  x.restore();
+}
+
+function drawFlower(x, cx, cy, size, env, rng) {
+  const spec = BLOOM[env.bloomName] || BLOOM.cup;
+  const count = env.bloomName === 'spray' ? 3 : 1;
+  const n = Math.min(24, Math.max(3, env.petals));
+  for (let m = 0; m < count; m++) {
+    const mx = count > 1 ? cx + (rng() - 0.5) * size * 2.4 : cx;
+    const my = count > 1 ? cy + (rng() - 0.5) * size * 2.4 : cy;
+    const s = count > 1 ? size * 0.55 : size;
+    if (env.glow) {
+      const g = x.createRadialGradient(mx, my, 0, mx, my, s * 3);
+      g.addColorStop(0, 'rgba(190,255,220,0.35)');
+      g.addColorStop(1, 'rgba(190,255,220,0)');
+      x.fillStyle = g;
+      x.beginPath();
+      x.arc(mx, my, s * 3, 0, TAU);
+      x.fill();
+    }
+    for (let p = 0; p < n; p++) {
+      const a = (TAU * p) / n + spec.spin * p * 0.12;
+      const col = env.rainbow ? `hsl(${(360 * p) / n},80%,72%)` : rgbStr(mixRgb(env.flowerColor[0], env.flowerColor[1], (p % 3) / 2));
+      x.save();
+      x.translate(mx + Math.cos(a) * s * spec.off, my + Math.sin(a) * s * spec.off);
+      x.rotate(a);
+      x.fillStyle = col;
+      x.beginPath();
+      x.ellipse(0, 0, s * spec.l, s * spec.w, 0, 0, TAU);
+      x.fill();
+      x.restore();
+    }
+    x.fillStyle = '#f2c94c';
+    x.beginPath();
+    x.arc(mx, my, s * 0.16, 0, TAU);
+    x.fill();
+  }
+}
+
+// Fruit position within a cluster of radius r, by arrangement.
+function fruitPos(arrangement, k, n, r, rng) {
+  switch (arrangement) {
+    case 'crown': {
+      const a = (TAU * k) / n;
+      return [Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6];
+    }
+    case 'garland': {
+      const a = Math.PI * 0.15 + Math.PI * 0.7 * (n > 1 ? k / (n - 1) : 0.5);
+      return [Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6 + r * 0.1];
+    }
+    case 'hang':
+      return [(k - (n - 1) / 2) * r * 0.22, r * (0.22 + 0.25 * rng())];
+    case 'spiral': {
+      const a = k * 2.39996;
+      const d = r * 0.6 * Math.sqrt((k + 1) / n);
+      return [Math.cos(a) * d, Math.sin(a) * d];
+    }
+    case 'const':
+      return [(rng() - 0.5) * r * 1.4, (rng() - 0.5) * r * 1.4];
+    default:
+      return [(rng() - 0.5) * r * 1.1, (rng() - 0.5) * r * 1.1];
+  }
+}
+
+function drawStar(x, cx, cy, r, points) {
+  for (let p = 0; p < points * 2; p++) {
+    const rad = p % 2 ? r * 0.45 : r;
+    const a = (Math.PI * p) / points - Math.PI / 2;
+    const px = cx + Math.cos(a) * rad;
+    const py = cy + Math.sin(a) * rad;
+    if (p === 0) x.moveTo(px, py);
+    else x.lineTo(px, py);
+  }
+  x.closePath();
+}
+
+function drawFruit(x, env, px, py, s, rng) {
+  if (env.fruitArrangement === 'hang') {
+    x.strokeStyle = 'rgba(70,50,30,0.6)';
+    x.lineWidth = s * 0.25;
+    x.beginPath();
+    x.moveTo(px, 0);
+    x.lineTo(px, py);
+    x.stroke();
+  }
+  if (env.fruit === 'orb') {
+    const g = x.createRadialGradient(px, py, 0, px, py, s * 2.6);
+    g.addColorStop(0, rgbStr(env.fruitColor, 0.45));
+    g.addColorStop(1, rgbStr(env.fruitColor, 0));
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(px, py, s * 2.6, 0, TAU);
+    x.fill();
+  }
+  x.fillStyle = rgbStr(env.fruitColor);
+  x.beginPath();
+  if (env.fruit === 'pod') {
+    x.ellipse(px, py, s * 1.6, s * 0.6, rng() * Math.PI, 0, TAU);
+  } else if (env.fruit === 'drupe') {
+    for (let d = -1; d <= 1; d++) {
+      const cy = py + (d === 0 ? -s * 0.5 : s * 0.2);
+      x.moveTo(px + d * s * 0.9 + s * 0.55, cy);
+      x.arc(px + d * s * 0.9, cy, s * 0.55, 0, TAU);
+    }
+  } else if (env.fruit === 'star') {
+    drawStar(x, px, py, s * 1.1, 5);
+  } else if (env.fruit === 'lantern') {
+    x.ellipse(px, py, s * 0.8, s * 1.1, 0, 0, TAU);
+  } else {
+    x.arc(px, py, s, 0, TAU);
+  }
+  x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.45)';
+  x.beginPath();
+  x.arc(px - s * 0.3, py - s * 0.3, s * 0.25, 0, TAU);
+  x.fill();
+}
+
+// Crystal facets for clusters with the crystalline gene.
+function drawCrystals(x, r, rng) {
+  for (let k = 0; k < 3; k++) {
+    const a = rng() * TAU;
+    const d = r * (0.6 + 0.3 * rng());
+    const s = r * 0.14;
+    const cx = Math.cos(a) * d;
+    const cy = Math.sin(a) * d;
+    x.beginPath();
+    x.moveTo(cx, cy - s);
+    x.lineTo(cx + s * 0.6, cy);
+    x.lineTo(cx, cy + s);
+    x.lineTo(cx - s * 0.6, cy);
+    x.closePath();
+    x.fillStyle = 'rgba(206,246,255,0.8)';
+    x.fill();
+    x.strokeStyle = 'rgba(255,255,255,0.9)';
+    x.lineWidth = s * 0.12;
+    x.stroke();
+  }
+}
+
+// One cluster sprite: leaves, flowers, fruit, and crystal facets, drawn in cluster units at res px per unit.
+function buildClusterSprite(c, env, res) {
+  const size = Math.max(8, Math.ceil(2 * c.radius * res * 1.15));
+  const cv = document.createElement('canvas');
+  cv.width = size;
+  cv.height = size;
+  const x = cv.getContext('2d');
+  x.setTransform(res, 0, 0, res, size / 2, size / 2);
+  const rng = rngFrom(c.seed);
+  for (const s of leafSpecs(c, env, rng)) drawLeaf(x, s, env);
+  const blossoms = env.blossom && rng() < 0.6 ? 1 : 0;
+  for (let f = 0; f < c.flowers + blossoms; f++) {
+    const fx = (rng() - 0.5) * c.radius * 0.9;
+    const fy = (rng() - 0.5) * c.radius * 0.9;
+    drawFlower(x, fx, fy, c.radius * 0.17 * env.flowerSize * (0.8 + 0.4 * rng()), env, rng);
+  }
+  for (let f = 0; f < c.fruit; f++) {
+    const [fx, fy] = fruitPos(env.fruitArrangement, f, c.fruit, c.radius, rng);
+    drawFruit(x, env, fx, fy, c.radius * 0.1 * env.fruitSize * (0.85 + 0.3 * rng()), rng);
+  }
+  if (c.crystal) drawCrystals(x, c.radius, rng);
+  return { cv, res, half: size / 2 };
+}
+
+// Sprites for every cluster of a layout, in cluster order.
+function buildSprites(layout, traits, res) {
+  const env = renderEnv(traits);
+  return layout.clusters.map((c) => buildClusterSprite(c, env, res));
+}
+
+// Runtime cache: layout, traits, and sprites per plant. Holds the 8 most recently used plants.
+const RUNTIME = new Map();
+
+function runtimeFor(record) {
+  const cached = RUNTIME.get(record.id);
+  if (cached) {
+    RUNTIME.delete(record.id);
+    RUNTIME.set(record.id, cached);
+    return cached;
+  }
+  const analysis = analyze(record.genes);
+  const traits = traitsOf(record.genes);
+  const layout = buildLayout(record.genes, analysis.seed);
+  const order = layout.clusters.map((_, k) => k)
+    .sort((a, b) => layout.nodes[layout.clusters[a].node].depth - layout.nodes[layout.clusters[b].node].depth);
+  const phases = Float64Array.from(layout.clusters, (c) => ((c.seed % 1000) / 1000) * TAU);
+  const rt = { id: record.id, analysis, traits, layout, order, phases, sprites: new Map() };
+  RUNTIME.set(record.id, rt);
+  if (RUNTIME.size > 8) RUNTIME.delete(RUNTIME.keys().next().value);
+  return rt;
+}
+
+// Sprites for one resolution bucket, cached per plant. Keeps the 3 most recent buckets.
+function spritesFor(rt, res) {
+  let entry = rt.sprites.get(res);
+  if (!entry) {
+    entry = { res, list: buildSprites(rt.layout, rt.traits, res) };
+    rt.sprites.set(res, entry);
+    if (rt.sprites.size > 3) rt.sprites.delete(rt.sprites.keys().next().value);
+  }
+  return entry;
+}
+
+// Bark glyphs, placed along a trunk or branch. (ux, uy) is along the node, (nx, ny) is its normal.
+function drawMark(x, kind, px, py, ux, uy, nx, ny, s) {
+  switch (kind) {
+    case 'furrow':
+      x.strokeStyle = 'rgba(28,17,9,0.38)';
+      x.lineWidth = s * 0.35;
+      x.beginPath();
+      x.moveTo(px - ux * s * 3, py - uy * s * 3);
+      x.lineTo(px + ux * s * 3, py + uy * s * 3);
+      x.stroke();
+      break;
+    case 'stripe':
+      x.strokeStyle = 'rgba(30,20,10,0.3)';
+      x.lineWidth = s * 0.8;
+      x.beginPath();
+      x.moveTo(px - ux * s * 6, py - uy * s * 6);
+      x.lineTo(px + ux * s * 6, py + uy * s * 6);
+      x.stroke();
+      break;
+    case 'paper':
+      x.strokeStyle = 'rgba(255,248,230,0.4)';
+      x.lineWidth = s * 0.5;
+      x.beginPath();
+      x.moveTo(px - nx * s * 2, py - ny * s * 2);
+      x.lineTo(px + nx * s * 2, py + ny * s * 2);
+      x.stroke();
+      break;
+    case 'scale':
+      x.strokeStyle = 'rgba(255,238,210,0.22)';
+      x.lineWidth = s * 0.4;
+      x.beginPath();
+      x.arc(px, py, s * 1.2, 0.2, Math.PI - 0.2);
+      x.stroke();
+      break;
+    case 'gnarl':
+      x.strokeStyle = 'rgba(24,14,8,0.35)';
+      x.lineWidth = s * 0.45;
+      x.beginPath();
+      x.arc(px, py, s * 1.1, 0, Math.PI * 1.5);
+      x.stroke();
+      break;
+    case 'spot':
+      x.fillStyle = 'rgba(40,24,14,0.36)';
+      x.beginPath();
+      x.ellipse(px, py, s * 1.3, s * 0.9, Math.atan2(uy, ux), 0, TAU);
+      x.fill();
+      break;
+    case 'rune':
+      x.strokeStyle = 'rgba(255,214,140,0.42)';
+      x.lineWidth = s * 0.45;
+      x.beginPath();
+      x.moveTo(px - ux * s - nx * s, py - uy * s - ny * s);
+      x.lineTo(px, py);
+      x.lineTo(px - ux * s + nx * s, py - uy * s + ny * s);
+      x.stroke();
+      break;
+    case 'eye':
+      x.strokeStyle = 'rgba(28,18,10,0.5)';
+      x.lineWidth = s * 0.45;
+      x.beginPath();
+      x.arc(px, py, s * 1.6, 0, TAU);
+      x.stroke();
+      x.fillStyle = 'rgba(20,12,6,0.55)';
+      x.beginPath();
+      x.arc(px, py, s * 0.6, 0, TAU);
+      x.fill();
+      break;
+    case 'marble':
+      x.strokeStyle = 'rgba(240,230,210,0.25)';
+      x.lineWidth = s * 0.4;
+      x.beginPath();
+      x.moveTo(px - ux * s * 3, py - uy * s * 3);
+      x.quadraticCurveTo(px + nx * s * 1.5, py + ny * s * 1.5, px + ux * s * 3, py + uy * s * 3);
+      x.stroke();
+      break;
+    case 'vein':
+      x.save();
+      x.globalCompositeOperation = 'lighter';
+      x.strokeStyle = 'rgba(140,255,225,0.4)';
+      x.lineWidth = s * 0.5;
+      x.beginPath();
+      x.moveTo(px - ux * s * 4, py - uy * s * 4);
+      x.lineTo(px + ux * s * 4, py + uy * s * 4);
+      x.stroke();
+      x.restore();
+      break;
+    case 'moss':
+      x.fillStyle = 'rgba(98,156,72,0.55)';
+      x.beginPath();
+      x.arc(px, py, s * 0.9, 0, TAU);
+      x.fill();
+      break;
+    case 'lichen':
+      x.fillStyle = 'rgba(196,216,160,0.5)';
+      x.beginPath();
+      x.arc(px, py, s * 1.5, 0, TAU);
+      x.fill();
+      break;
+    case 'velvetmoss':
+      x.fillStyle = 'rgba(72,134,64,0.42)';
+      x.beginPath();
+      x.arc(px, py, s * 2, 0, TAU);
+      x.fill();
+      break;
+    case 'glowmoss':
+      x.save();
+      x.globalCompositeOperation = 'lighter';
+      x.fillStyle = 'rgba(150,255,200,0.55)';
+      x.beginPath();
+      x.arc(px, py, s * 1.3, 0, TAU);
+      x.fill();
+      x.restore();
+      break;
+    default:
+      break;
+  }
+}
+
+const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// A canvas that shows one plant. Owns its fit, sprites, and particles. Animates only while started.
+class PlantView {
+  constructor(canvas, opts = {}) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.opts = Object.assign({ hybridColors: null }, opts);
+    this.motion = prefersReducedMotion() ? 0.4 : 1;
+    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.record = null;
+    this.rt = null;
+    this.buf = null;
+    this.grow = 1;
+    this.growDuration = 1.8;
+    this.particles = [];
+    this.W = 300;
+    this.H = 300;
+    this.U = 100;
+    this.bx = 0;
+    this.by = 0;
+    this.resize();
+  }
+
+  // Match the canvas to its CSS box and refit the plant.
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.W = Math.max(1, Math.round(rect.width || this.W));
+    this.H = Math.max(1, Math.round(rect.height || this.H));
+    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.canvas.width = Math.round(this.W * this.dpr);
+    this.canvas.height = Math.round(this.H * this.dpr);
+    this.computeFit();
+  }
+
+  // U = min(W * 0.46 / halfWidth, H * 0.82 / height) in CSS px. The base sits at y = H * 0.92.
+  computeFit() {
+    if (!this.rt) return;
+    const b = this.rt.layout.bounds;
+    const halfW = Math.max(0.3, Math.abs(b.minX), Math.abs(b.maxX));
+    const height = Math.max(0.5, -b.top + this.rt.layout.hover);
+    this.U = Math.min((this.W * 0.46) / halfW, (this.H * 0.82) / height);
+    this.bx = this.W / 2 - ((b.minX + b.maxX) / 2) * this.U;
+    this.by = this.H * 0.92;
+  }
+
+  ensureSprites() {
+    if (!this.rt) return null;
+    const want = Math.max(24, this.U * this.dpr * SPRITE_SCALE);
+    return spritesFor(this.rt, Math.round(want / 8) * 8);
+  }
+
+  setPlant(record, opts = {}) {
+    this.record = record;
+    this.opts = Object.assign(this.opts, opts);
+    this.rt = runtimeFor(record);
+    this.grow = opts.animate === false ? 1 : 0;
+    this.growDuration = opts.growDuration || 1.8;
+    this.particles.length = 0;
+    this.computeFit();
+    this.ensureSprites();
+  }
+
+  buffers(n) {
+    if (!this.buf || this.buf.n !== n) {
+      this.buf = {
+        n,
+        SX: new Float64Array(n),
+        SY: new Float64Array(n),
+        EX: new Float64Array(n),
+        EY: new Float64Array(n),
+        WA: new Float64Array(n),
+        GP: new Float64Array(n),
+      };
+    }
+    return this.buf;
+  }
+
+  // Draw one frame at time t (seconds) with growth g in [0, 1]. Leaves the context at identity.
+  drawFrame(t, g) {
+    const ctx = this.ctx;
+    if (!ctx || !this.rt) return;
+    const L = this.rt.layout;
+    const N = L.nodes.length;
+    const { SX, SY, EX, EY, WA, GP } = this.buffers(N);
+    const U = this.U * this.dpr;
+    const baseX = this.bx * this.dpr;
+    const baseY = (this.by - L.hover * this.U) * this.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Node pose: each node starts at its parent's current end, so sway accumulates up the tree.
+    for (let i = 0; i < N; i++) {
+      const nd = L.nodes[i];
+      const px = nd.parent < 0 ? nd.x : EX[nd.parent];
+      const py = nd.parent < 0 ? nd.y : EY[nd.parent];
+      const gp = growthOf(nd.birth, g);
+      const a = nd.angle + this.motion * nd.sway * Math.sin(t * nd.freq + nd.phase);
+      const len = nd.length * gp;
+      SX[i] = px;
+      SY[i] = py;
+      WA[i] = a;
+      GP[i] = gp;
+      EX[i] = px + Math.cos(a) * len;
+      EY[i] = py + Math.sin(a) * len;
+    }
+
+    // Branches: tapered quads, with a highlight stroke on the thicker wood.
+    for (let i = 0; i < N; i++) {
+      if (GP[i] < 0.01) continue;
+      const nd = L.nodes[i];
+      const x0 = baseX + SX[i] * U;
+      const y0 = baseY + SY[i] * U;
+      const x1 = baseX + EX[i] * U;
+      const y1 = baseY + EY[i] * U;
+      const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+      const nx = -(y1 - y0) / len;
+      const ny = (x1 - x0) / len;
+      const h0 = Math.max(0.6, nd.w0 * U * 0.5);
+      const h1 = Math.max(0.4, nd.w1 * U * 0.5);
+      ctx.fillStyle = nd.color;
+      ctx.beginPath();
+      ctx.moveTo(x0 + nx * h0, y0 + ny * h0);
+      ctx.lineTo(x1 + nx * h1, y1 + ny * h1);
+      ctx.lineTo(x1 - nx * h1, y1 - ny * h1);
+      ctx.lineTo(x0 - nx * h0, y0 - ny * h0);
+      ctx.closePath();
+      ctx.fill();
+      if (h0 > 1.2) {
+        ctx.strokeStyle = 'rgba(255,238,205,0.14)';
+        ctx.lineWidth = h0 * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x0 + nx * h0 * 0.4, y0 + ny * h0 * 0.4);
+        ctx.lineTo(x1 + nx * h1 * 0.4, y1 + ny * h1 * 0.4);
+        ctx.stroke();
+      }
+    }
+
+    // Bark marks sit on their node, offset along its normal in proportion to its width.
+    for (const m of L.marks) {
+      const i = m.n;
+      if (GP[i] < 0.5) continue;
+      const nd = L.nodes[i];
+      const x0 = baseX + SX[i] * U;
+      const y0 = baseY + SY[i] * U;
+      const x1 = baseX + EX[i] * U;
+      const y1 = baseY + EY[i] * U;
+      const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+      const ux = (x1 - x0) / len;
+      const uy = (y1 - y0) / len;
+      const nx = -uy;
+      const ny = ux;
+      const hw = (nd.w0 + (nd.w1 - nd.w0) * m.t) * U * 0.5;
+      const cx = x0 + (x1 - x0) * m.t + nx * m.o * hw;
+      const cy = y0 + (y1 - y0) * m.t + ny * m.o * hw;
+      drawMark(ctx, m.kind, cx, cy, ux, uy, nx, ny, m.size * U * 0.012);
+    }
+
+    // Cluster sprites: one drawImage each, with rustle and growth scale in the transform.
+    const sprites = this.ensureSprites();
+    if (sprites) {
+      const scale = U / sprites.res;
+      for (const k of this.rt.order) {
+        const c = L.clusters[k];
+        const cg = easeOutBack(clamp01((g - c.birth) / 0.22));
+        if (cg < 0.01) continue;
+        const i = c.node;
+        const a = WA[i];
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        const ax = SX[i] + (EX[i] - SX[i]) * c.along;
+        const ay = SY[i] + (EY[i] - SY[i]) * c.along;
+        const px = ax + ca * c.offX - sa * c.offY;
+        const py = ay + sa * c.offX + ca * c.offY;
+        const ph = this.rt.phases[k];
+        const rot = a + c.angle + this.motion * (0.08 * Math.sin(t * 1.6 + ph) + 0.03 * Math.sin(t * 3.7 + ph * 1.7));
+        const f = scale * cg;
+        const cs = Math.cos(rot) * f;
+        const sn = Math.sin(rot) * f;
+        const spr = sprites.list[k];
+        ctx.setTransform(cs, sn, -sn, cs, baseX + px * U, baseY + py * U);
+        ctx.drawImage(spr.cv, -spr.half, -spr.half);
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // Called by the Loop. Advances growth, then draws.
+  update(t, dt) {
+    if (this.grow < 1) this.grow = Math.min(1, this.grow + dt / this.growDuration);
+    this.drawFrame(t, this.grow);
+  }
+
+  // Star motes that burst from the plant. Drawn by the effects layer.
+  burst(color = '#ffe9a8') {
+    for (let k = 0; k < 12; k++) {
+      const a = (TAU * k) / 12 + Math.random() * 0.4;
+      const s = 0.12 + Math.random() * 0.18;
+      this.particles.push({ kind: 'star', x: 0, y: -0.5, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 0.05, age: 0, life: 1.4, color });
+    }
+  }
+
+  start() {
+    Loop.add(this);
+  }
+
+  stop() {
+    Loop.remove(this);
+  }
+}
+
+EG.PlantView = PlantView;
+EG.runtimeFor = runtimeFor;
+EG.buildSprites = buildSprites;
+
 /* @@js:renderer */
 
 /* ===== Loop ===== */
+/* ---------- Loop: one requestAnimationFrame loop for every active viewer ---------- */
+const Loop = (() => {
+  const viewers = new Set();
+  let running = false;
+  let rafId = 0;
+  let last = 0;
+  let clock = 0;
+
+  function frame(now) {
+    if (!running) return;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    clock += dt;
+    for (const viewer of viewers) viewer.update(clock, dt);
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function stop() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+
+  // Starts the loop only when there is a viewer and the page is visible.
+  function ensure() {
+    if (running || document.hidden || viewers.size === 0) return;
+    running = true;
+    last = performance.now();
+    rafId = requestAnimationFrame(frame);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else ensure();
+  });
+
+  return {
+    add(viewer) {
+      viewers.add(viewer);
+      ensure();
+    },
+    remove(viewer) {
+      viewers.delete(viewer);
+      if (viewers.size === 0) stop();
+    },
+    get time() {
+      return clock;
+    },
+  };
+})();
+
+EG.Loop = Loop;
+
 /* @@js:loop */
 
 /* ===== Store ===== */
